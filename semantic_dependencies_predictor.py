@@ -88,7 +88,7 @@ class SemanticDependenciesPredictor(Predictor):
         self._tokenizer = SpacyTokenizer(language=language, pos_tags=True)
 
     def dump_line(self, outputs: JsonDict) -> str:
-        OFFSET = 8
+        OFFSET = 7
         words = outputs['tokens']
         arcs = outputs['arcs']
         arc_tags = outputs['arc_tags']
@@ -106,15 +106,15 @@ class SemanticDependenciesPredictor(Predictor):
                 word.lower(),
                 'POS',
                 '-',
-                '+' if len(predicates[i]) > 0 else '-',
+                '+' if i in predicates else '-',
                 '_'
             ] + ['_' for _ in range(len(predicates))]
             for i, word in enumerate(words)
         ]
-        for head, deps in predicates.items():
+        for head, (_, deps) in enumerate(sorted(predicates.items())):
             for dep, tag in deps.items():
                 lines[dep][OFFSET + head] = tag
-        return '\n'.join('\t'.join(line) for line in lines) + '\n'
+        return '\n'.join('\t'.join(line) for line in lines) + '\n\n'
 
 
     def predict(self, sentence: str) -> JsonDict:
