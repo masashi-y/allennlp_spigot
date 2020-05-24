@@ -19,16 +19,94 @@ from allennlp.nn.util import get_text_field_mask
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
 from allennlp.training.metrics import F1Measure
 from allennlp_models.syntax import GraphParser
+import spigot
 
 logger = logging.getLogger(__name__)
 
 
 @Model.register("syntactic_then_semantic")
 class SyntacticThenSemanticPraser(GraphParser):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        vocab: Vocabulary,
+        text_field_embedder: TextFieldEmbedder,
+        encoder: Seq2SeqEncoder,
+        tag_representation_dim: int,
+        arc_representation_dim: int,
+        tag_feedforward: FeedForward = None,
+        arc_feedforward: FeedForward = None,
+        pos_tag_embedding: Embedding = None,
+        dropout: float = 0.0,
+        input_dropout: float = 0.0,
+        edge_prediction_threshold: float = 0.5,
+        initializer: InitializerApplicator = InitializerApplicator(),
+        **kwargs,
+    ) -> None:
+        super().__init__(vocab, **kwargs)
+
+        self.text_field_embedder = text_field_embedder
+        self.encoder = encoder
+        self.edge_prediction_threshold = edge_prediction_threshold
+        if not 0 < edge_prediction_threshold < 1:
+            raise ConfigurationError(
+                f"edge_prediction_threshold must be between "
+                f"0 and 1 (exclusive) but found {edge_prediction_threshold}."
+            )
+
+        encoder_dim = encoder.get_output_dim()
+
+        self.head_arc_feedforward = arc_feedforward or FeedForward(
+            encoder_dim * 2, 1, arc_representation_dim, Activation.by_name("elu")()
+        )
+        self.child_arc_feedforward = copy.deepcopy(self.head_arc_feedforward)
+
+        self.arc_attention = BilinearMatrixAttention(
+            arc_representation_dim, arc_representation_dim, use_input_biases=True
+        )
+
+        num_labels = self.vocab.get_vocab_size("labels")
+        self.head_tag_feedforward = tag_feedforward or FeedForward(
+            encoder_dim * 2, 1, tag_representation_dim, Activation.by_name("elu")()
+        )
+        self.child_tag_feedforward = copy.deepcopy(self.head_tag_feedforward)
+
+        self.tag_bilinear = BilinearMatrixAttention(
+            tag_representation_dim, tag_representation_dim, label_dim=num_labels
+        )
+
+        self._pos_tag_embedding = pos_tag_embedding or None
+        self._dropout = InputVariationalDropout(dropout)
+        self._input_dropout = Dropout(input_dropout)
         self._head_sentinel = torch.nn.Parameter(
             torch.randn([1, 1, self.encoder.get_output_dim()]))
+
+        representation_dim = text_field_embedder.get_output_dim()
+        if pos_tag_embedding is not None:
+            representation_dim += pos_tag_embedding.get_output_dim()
+
+        check_dimensions_match(
+            representation_dim,
+            encoder.get_input_dim(),
+            "text field embedding dim",
+            "encoder input dim",
+        )
+        check_dimensions_match(
+            tag_representation_dim,
+            self.head_tag_feedforward.get_output_dim(),
+            "tag representation dim",
+            "tag feedforward output dim",
+        )
+        check_dimensions_match(
+            arc_representation_dim,
+            self.head_arc_feedforward.get_output_dim(),
+            "arc representation dim",
+            "arc feedforward output dim",
+        )
+
+        self._unlabelled_f1 = F1Measure(positive_label=1)
+        self._arc_loss = torch.nn.BCEWithLogitsLoss(reduction="none")
+        self._tag_loss = torch.nn.CrossEntropyLoss(reduction="none")
+        initializer(self)
 
 
     @overrides
@@ -72,17 +150,9 @@ class SyntacticThenSemanticPraser(GraphParser):
         batch_size, _, encoding_dim = encoded_text.size()
         head_sentinel = self._head_sentinel.expand(batch_size, 1, encoding_dim)
 
-        encoded_text_with_sentinel = torch.cat([head_sentinel, encoded_text], 1)
-        torch.gather()
-
-        mask = torch.cat([mask.new_ones(batch_size, 1), mask], 1)
-        if head_indices is not None:
-            head_indices = torch.cat([head_indices.new_zeros(batch_size, 1), head_indices], 1)
-        if head_tags is not None:
-            head_tags = torch.cat([head_tags.new_zeros(batch_size, 1), head_tags], 1)
-        encoded_text = self._dropout(encoded_text)
-
-        encoded_text = self._dropout(encoded_text)
+        encoded_text_with_sentinel = self._dropout(torch.cat([head_sentinel, encoded_text], 1))
+        encoded_text_heads = spigot.utils.gather_row(encoded_text_with_sentinel, heads)
+        encoded_text = torch.cat([encoded_text, encoded_text_heads[:, 1:, :]], dim=2)
 
         # shape (batch_size, sequence_length, arc_representation_dim)
         head_arc_representation = self._dropout(self.head_arc_feedforward(encoded_text))
