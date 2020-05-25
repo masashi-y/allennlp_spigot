@@ -4,7 +4,7 @@ import torch
 
 
 def eisner(scores, mask):
-    lens = mask.sum(1)
+    lens = mask.sum(1) - 1  # minus ROOT
     batch_size, seq_len, _ = scores.shape
     scores = scores.permute(2, 1, 0)
     s_i = torch.full_like(scores, float('-inf'))
@@ -123,10 +123,11 @@ def test():
         ],
     ], dtype=torch.float)
 
-    mask = torch.ones((2, 5)).long()
+    mask = torch.ones((2, 6)).long()
     mask[0, -1] = 0
 
     res = eisner(scores, mask)
     print(res[0])
     print(res[1])
 
+# test()
