@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @Model.register("syntactic_then_semantic")
-class SyntacticThenSemanticPraser(GraphParser):
+class SyntacticThenSemanticPraser(Model):
     def __init__(
         self,
         vocab: Vocabulary,
@@ -113,7 +113,7 @@ class SyntacticThenSemanticPraser(GraphParser):
     def forward(
         self,  # type: ignore
         tokens: TextFieldTensors,
-        heads: torch.LongTensor,
+        head_indices: torch.LongTensor,
         pos_tags: torch.LongTensor = None,
         metadata: List[Dict[str, Any]] = None,
         arc_tags: torch.LongTensor = None,
@@ -122,7 +122,7 @@ class SyntacticThenSemanticPraser(GraphParser):
         # Parameters
         tokens : TextFieldTensors, required
             The output of `TextField.as_array()`.
-        heads: torch.LongTensor,
+        head_indices: torch.LongTensor,
             The output of a `SequenceLabelField` containing syntactic head indices.
         pos_tags : torch.LongTensor, optional (default = None)
             The output of a `SequenceLabelField` containing POS tags.
@@ -151,8 +151,8 @@ class SyntacticThenSemanticPraser(GraphParser):
         head_sentinel = self._head_sentinel.expand(batch_size, 1, encoding_dim)
 
         encoded_text_with_sentinel = self._dropout(torch.cat([head_sentinel, encoded_text], 1))
-        encoded_text_heads = spigot.utils.gather_row(encoded_text_with_sentinel, heads)
-        encoded_text = torch.cat([encoded_text, encoded_text_heads[:, 1:, :]], dim=2)
+        encoded_text_heads = spigot.utils.gather_row(encoded_text_with_sentinel, head_indices)
+        encoded_text = torch.cat([encoded_text, encoded_text_heads], dim=2)
 
         # shape (batch_size, sequence_length, arc_representation_dim)
         head_arc_representation = self._dropout(self.head_arc_feedforward(encoded_text))

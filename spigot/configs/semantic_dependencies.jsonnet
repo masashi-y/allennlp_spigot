@@ -1,12 +1,12 @@
 {
     "dataset_reader":{
-        "type":"semantic_dependencies"
+        "type":"syntactic_then_semantic"
     },
     "train_data_path": "/home/masashi-y/english/english_dm_augmented_train.sdp",
     "validation_data_path": "/home/masashi-y/english/english_dm_augmented_dev.sdp",
     "test_data_path": "/home/masashi-y/english/english_id_dm_augmented_test.sdp",
     "model": {
-      "type": "graph_parser",
+      "type": "syntactic_then_semantic",
       "text_field_embedder": {
         "token_embedders": {
           "tokens": {

@@ -154,17 +154,17 @@ def test():
 #     test()
 # print(project_onto_knapsack_constraint_batch(torch.tensor([[-10, -10000, 0], [-10, -10000, -10]]).float()))
 
-for i in range(10000):
-    x = torch.randint(0, 100, (5,)).float()
-    x[2:4] = torch.randint(-1000, 0, (2,)).float()
-    res0 = project_onto_knapsack_constraint(x)
-    weights = torch.ones((9,), dtype=torch.float)
-    weights[5:] = 0.
-    x = torch.cat([x, torch.zeros((4,), dtype=torch.float)])
-    res1 = project_onto_knapsack_constraint(x, weights)[:5]
-    if not torch.allclose(res0, res1):
-        raise 'aaaaaaaaaaa'
-    else:
-        print(x)
-        print(res0)
-        print()
+# for i in range(10000):
+#     x = torch.randint(0, 100, (5,)).float()
+#     x[2:4] = torch.randint(-1000, 0, (2,)).float()
+#     res0 = project_onto_knapsack_constraint(x)
+#     weights = torch.ones((9,), dtype=torch.float)
+#     weights[5:] = 0.
+#     x = torch.cat([x, torch.zeros((4,), dtype=torch.float)])
+#     res1 = project_onto_knapsack_constraint(x, weights)[:5]
+#     if not torch.allclose(res0, res1):
+#         raise 'aaaaaaaaaaa'
+#     else:
+#         print(x)
+#         print(res0)
+#         print()
