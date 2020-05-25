@@ -5,7 +5,6 @@ import torch
 
 def eisner(scores, mask):
     lens = mask.sum(1)
-    print(lens)
     batch_size, seq_len, _ = scores.shape
     scores = scores.permute(2, 1, 0)
     s_i = torch.full_like(scores, float('-inf'))
@@ -48,11 +47,11 @@ def eisner(scores, mask):
     p_c = p_c.permute(2, 0, 1).cpu()
     p_i = p_i.permute(2, 0, 1).cpu()
     for i, length in enumerate(lens.tolist()):
-        heads = p_c.new_full((length + 1,), -1, dtype=torch.long)
+        heads = p_c.new_zeros((seq_len, seq_len), dtype=torch.float)
         backtrack(p_i[i], p_c[i], heads, 0, length, True)
         predicts.append(heads.to(mask.device))
 
-    return torch.nn.utils.rnn.pad_sequence(predicts, True, padding_value=-1)
+    return torch.stack(predicts, dim=0)
 
 
 def backtrack(p_i, p_c, heads, i, j, complete):
@@ -63,7 +62,7 @@ def backtrack(p_i, p_c, heads, i, j, complete):
         backtrack(p_i, p_c, heads, i, r, False)
         backtrack(p_i, p_c, heads, r, j, True)
     else:
-        r, heads[j] = p_i[i, j], i
+        r, heads[j, i] = p_i[i, j], 1.
         i, j = sorted((i, j))
         backtrack(p_i, p_c, heads, i, r, True)
         backtrack(p_i, p_c, heads, j, r + 1, True)
@@ -103,7 +102,6 @@ def stripe(x, n, w, offset=(0, 0), dim=1):
                         storage_offset=(offset[0]*seq_len+offset[1])*numel)
 
 
-
 def test():
     # ROOT this is a pen
     scores = torch.tensor([
@@ -125,8 +123,10 @@ def test():
         ],
     ], dtype=torch.float)
 
-    mask = torch.ones((2, 4)).long()
+    mask = torch.ones((2, 5)).long()
     mask[0, -1] = 0
 
-    print(eisner(scores, mask))
+    res = eisner(scores, mask)
+    print(res[0])
+    print(res[1])
 
