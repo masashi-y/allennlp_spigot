@@ -111,7 +111,7 @@ class SyntacticallyInformedGraphParser(Model):
     @overrides
     def forward(
         self,  # type: ignore
-        tokens: TextFieldTensors,
+        words: TextFieldTensors,
         head_indices: torch.LongTensor,
         pos_tags: torch.LongTensor = None,
         metadata: List[Dict[str, Any]] = None,
@@ -119,7 +119,7 @@ class SyntacticallyInformedGraphParser(Model):
     ) -> Dict[str, torch.Tensor]:
         """
         # Parameters
-        tokens : TextFieldTensors, required
+        words : TextFieldTensors, required
             The output of `TextField.as_array()`.
         head_indices: torch.LongTensor,
             Either of the output of a `SequenceLabelField` containing syntactic head indices,
@@ -128,7 +128,7 @@ class SyntacticallyInformedGraphParser(Model):
             The output of a `SequenceLabelField` containing POS tags.
         metadata : List[Dict[str, Any]], optional (default = None)
             A dictionary of metadata for each batch element which has keys:
-                tokens : `List[str]`, required.
+                words : `List[str]`, required.
                     The original string tokens in the sentence.
         arc_tags : torch.LongTensor, optional (default = None)
             A torch tensor representing the sequence of integer indices denoting the parent of every
@@ -136,14 +136,14 @@ class SyntacticallyInformedGraphParser(Model):
         # Returns
         An output dictionary.
         """
-        embedded_text_input = self.text_field_embedder(tokens)
+        embedded_text_input = self.text_field_embedder(words)
         if pos_tags is not None and self._pos_tag_embedding is not None:
             embedded_pos_tags = self._pos_tag_embedding(pos_tags)
             embedded_text_input = torch.cat([embedded_text_input, embedded_pos_tags], -1)
         elif self._pos_tag_embedding is not None:
             raise ConfigurationError("Model uses a POS embedding, but no POS tags were passed.")
 
-        mask = get_text_field_mask(tokens)
+        mask = get_text_field_mask(words)
         embedded_text_input = self._input_dropout(embedded_text_input)
         encoded_text = self.encoder(embedded_text_input, mask)
 
@@ -158,7 +158,7 @@ class SyntacticallyInformedGraphParser(Model):
         else:
             # when head_indices is an adjacency matrix representing the dependency strcuture
             assert len(head_indices.size()) == 3
-            pass
+            encoded_text_heads = torch.bmm(head_indices, encoded_text_with_sentinel)
         encoded_text = torch.cat([encoded_text, encoded_text_heads], dim=2)
 
         # shape (batch_size, sequence_length, arc_representation_dim)
@@ -183,8 +183,8 @@ class SyntacticallyInformedGraphParser(Model):
 
         output_dict = {"arc_probs": arc_probs, "arc_tag_probs": arc_tag_probs, "mask": mask}
 
-        if metadata:
-            output_dict["tokens"] = [meta["tokens"] for meta in metadata]
+        if metadata is not None:
+            output_dict["words"] = [meta["words"] for meta in metadata]
 
         if arc_tags is not None:
             arc_nll, tag_nll = self._construct_loss(

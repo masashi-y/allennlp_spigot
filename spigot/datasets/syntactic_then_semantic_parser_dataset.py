@@ -16,6 +16,15 @@ from allennlp.data.instance import Instance
 logger = logging.getLogger(__name__)
 
 
+def normalize_postag(pos):
+    if pos == '(':
+        return '-LRB-'
+    elif pos == ')':
+        return '-RRB-'
+    else:
+        return pos
+
+
 @DatasetReader.register("syntactic_then_semantic")
 class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDatasetReader):
     """
@@ -45,7 +54,7 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
                 if not directed_arc_indices:
                     continue
                 tokens = [word["form"] for word in annotated_sentence]
-                pos_tags = [word["pos"] for word in annotated_sentence]
+                pos_tags = [normalize_postag(word["pos"]) for word in annotated_sentence]
                 heads = [int(word["head"]) for word in annotated_sentence]
                 yield self.text_to_instance(
                     tokens, heads, pos_tags, directed_arc_indices, arc_tags)
@@ -53,7 +62,7 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
     @overrides
     def text_to_instance(
         self,  # type: ignore
-        tokens: List[str],
+        words: List[str],
         heads: List[int],
         pos_tags: List[str] = None,
         arc_indices: List[Tuple[int, int]] = None,
@@ -61,9 +70,9 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
     ) -> Instance:
 
         fields: Dict[str, Field] = {}
-        token_field = TextField([Token(t) for t in tokens], self._token_indexers)
-        fields["tokens"] = token_field
-        fields["metadata"] = MetadataField({"tokens": tokens})
+        token_field = TextField([Token(t) for t in words], self._token_indexers)
+        fields["words"] = token_field
+        fields["metadata"] = MetadataField({"words": words, "pos": pos_tags})
         if pos_tags is not None:
             fields["pos_tags"] = SequenceLabelField(pos_tags, token_field, label_namespace="pos")
         if heads is not None:

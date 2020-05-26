@@ -127,7 +127,10 @@ def test():
     mask[0, -1] = 0
 
     res = eisner(scores, mask)
-    print(res[0])
-    print(res[1])
+
+    hidden_vectors = torch.arange(2 * 6 * 8).view(2, 6, 8).float()
+    print(res)
+    print(hidden_vectors)
+    print(torch.bmm(res[:, 1:], hidden_vectors))
 
 # test()

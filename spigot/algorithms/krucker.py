@@ -131,9 +131,9 @@ def project_onto_knapsack_constraint_batch(xs):
     return xs + solution
 
 
-import subprocess
 
 def test():
+    import subprocess
     x = torch.randn((6,)).float()
     input_text = str(x.size(0)) + ' ' + ' '.join(f'{float(v):.4}' for v in x)
     proc = subprocess.run("./a.out", shell=True, input=input_text, stdout=subprocess.PIPE, text=True)
