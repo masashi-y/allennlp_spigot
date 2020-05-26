@@ -60,4 +60,4 @@ def test():
     print(dep)
     print(scores.grad)
 
-test()
+# test()
