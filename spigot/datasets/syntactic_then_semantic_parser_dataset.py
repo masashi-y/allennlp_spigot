@@ -24,6 +24,11 @@ def normalize_postag(pos):
     else:
         return pos
 
+def normalize_deprel(label):
+    if label == 'vmod':
+        return 'partmod'
+    return label
+
 
 @DatasetReader.register("syntactic_then_semantic")
 class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDatasetReader):
@@ -56,14 +61,16 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
                 tokens = [word["form"] for word in annotated_sentence]
                 pos_tags = [normalize_postag(word["pos"]) for word in annotated_sentence]
                 heads = [int(word["head"]) for word in annotated_sentence]
+                head_tags = [normalize_deprel(word["deprel"]) for word in annotated_sentence]
                 yield self.text_to_instance(
-                    tokens, heads, pos_tags, directed_arc_indices, arc_tags)
+                    tokens, heads, head_tags, pos_tags, directed_arc_indices, arc_tags)
 
     @overrides
     def text_to_instance(
         self,  # type: ignore
         words: List[str],
         heads: List[int],
+        head_tags: List[str],
         pos_tags: List[str] = None,
         arc_indices: List[Tuple[int, int]] = None,
         arc_tags: List[str] = None,
@@ -77,6 +84,8 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
             fields["pos_tags"] = SequenceLabelField(pos_tags, token_field, label_namespace="pos")
         if heads is not None:
             fields["head_indices"] = SequenceLabelField(heads, token_field, label_namespace="head_indices")
+        if head_tags is not None:
+            fields["head_tags"] = SequenceLabelField(head_tags, token_field, label_namespace="head_tags")
         if arc_indices is not None and arc_tags is not None:
             fields["arc_tags"] = AdjacencyField(arc_indices, token_field, arc_tags)
 
