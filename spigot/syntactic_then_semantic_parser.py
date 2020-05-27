@@ -173,7 +173,7 @@ class SyntacticThenSemanticParser(Model):
         metrics = {}
         precision, recall, f1_measure = \
                 self.semantic_parser._unlabelled_f1.get_metric(reset)
-        attachment_scores = self.syntactic_parser._attachment_scores.get_metrics(reset)
+        attachment_scores = self.syntactic_parser.get_metrics(reset)
         metrics["precision"] = precision
         metrics["recall"] = recall
         metrics["f1"] = f1_measure
