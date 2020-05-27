@@ -19,7 +19,7 @@ from allennlp.nn.util import min_value_of_dtype
 from allennlp.nn.util import get_text_field_mask
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
 from allennlp.training.metrics import F1Measure
-from spigot.differentiable_eisner import eisner
+from spigot.differentiable_eisner import differentiable_eisner
 # from spigot.syntactically_informed_graph_parser import SyntacticallyInformedGraphParser
 # from spigot.biaffine_parser import MyBiaffineDependencyParser
 
@@ -101,7 +101,7 @@ class SyntacticThenSemanticParser(Model):
         batch_size, _ = mask.size()
         mask_with_root_token = torch.cat(
                 [mask.new_zeros((batch_size,1)), mask], dim=1)
-        predicted_heads = eisner(attended_arcs, mask_with_root_token)
+        predicted_heads = differentiable_eisner(attended_arcs, mask_with_root_token)
         semantic_outputs = self.semantic_parser(
                 words=words,
                 head_indices=predicted_heads[:, 1:],
