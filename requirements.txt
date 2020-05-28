@@ -1,0 +1,3 @@
+allennlp==1.0.0rc5
+allennlp-models==1.0.0rc3
+torch==1.5.0
