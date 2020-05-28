@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 
 @Model.register("syntactically_informed_graph_parser")
 class SyntacticallyInformedGraphParser(Model):
+    """This class is just a copy and paste of
+    the `allennlp_models.syntax.GraphParser` class, except that
+    this class's forward function takes an `head_indices` as an extra
+    argument and uses that information in predicting semantic dependencies.
+    """
     def __init__(
         self,
         vocab: Vocabulary,
@@ -123,7 +128,7 @@ class SyntacticallyInformedGraphParser(Model):
             The output of `TextField.as_array()`.
         head_indices: torch.LongTensor,
             Either of the output of a `SequenceLabelField` containing syntactic head indices,
-            or an adjacency matrices representing the syntactic structure
+            or an adjacency matrices representing the same syntactic structure
         pos_tags : torch.LongTensor, optional (default = None)
             The output of a `SequenceLabelField` containing POS tags.
         metadata : List[Dict[str, Any]], optional (default = None)
