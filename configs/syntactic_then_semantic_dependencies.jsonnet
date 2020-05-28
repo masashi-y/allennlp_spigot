@@ -6,6 +6,10 @@
   dataset_reader: {
     type: 'syntactic_then_semantic',
   },
+  dataset_reader: {
+    type: 'syntactic_then_semantic',
+    skip_when_no_arcs: false
+  },
   train_data_path: '/home/masashi-y/english/english_dm_augmented_train.sdp',
   validation_data_path: '/home/masashi-y/english/english_dm_augmented_dev.sdp',
   test_data_path: '/home/masashi-y/english/english_id_dm_augmented_test.sdp',
@@ -13,7 +17,7 @@
     type: 'syntactic_then_semantic',
     share_text_field_embedder: true,
     share_pos_tag_embedding: true,
-    decay_syntactic_loss: 0.3,
+    decay_syntactic_loss: 0.9,
     freeze_syntactic_parser: false,
     edge_prediction_threshold: 0.5,
     syntactic_parser: {
@@ -69,7 +73,7 @@
   },
   trainer: {
     num_epochs: 80,
-    grad_norm: 5.0,
+    grad_clipping: 1.0,
     patience: 50,
     cuda_device: 1,
     validation_metric: '+f1',

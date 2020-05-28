@@ -21,7 +21,7 @@ class SemanticDependenciesPredictor(Predictor):
 
     def dump_line(self, outputs: JsonDict) -> str:
         OFFSET = 7
-        words = outputs['tokens']
+        words = outputs['words']
         arcs = outputs['arcs']
         arc_tags = outputs['arc_tags']
         predicates = {i: {} for i in range(len(words))}

@@ -54,7 +54,14 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
 
     token_indexers : `Dict[str, TokenIndexer]`, optional (default=`{"tokens": SingleIdTokenIndexer()}`)
         The token indexers to be applied to the words TextField.
+    skip_when_no_arcs : `bool`, optional (default=`True`)
+        If this is true, skip examples containing no semantic arcs.
     """
+    def __init__(self,
+        skip_when_no_arcs = True,
+        **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.skip_when_no_arcs = skip_when_no_arcs
 
     @overrides
     def _read(self, file_path: str):
@@ -66,7 +73,7 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
         with open(file_path) as sdp_file:
             for annotated_sentence, directed_arc_indices, arc_tags in lazy_parse(sdp_file.read()):
                 # If there are no arc indices, skip this instance.
-                if not directed_arc_indices:
+                if self.skip_when_no_arcs and not directed_arc_indices:
                     continue
                 tokens = [word["form"] for word in annotated_sentence]
                 pos_tags = [normalize_postag(word["pos"]) for word in annotated_sentence]
