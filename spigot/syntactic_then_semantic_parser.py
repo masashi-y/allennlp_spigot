@@ -5,20 +5,14 @@ import copy
 
 from overrides import overrides
 import torch
-from torch.nn.modules import Dropout
 import numpy
 
-from allennlp.common.checks import check_dimensions_match, ConfigurationError
 from allennlp.data import TextFieldTensors, Vocabulary
-from allennlp.modules import Seq2SeqEncoder, TextFieldEmbedder, Embedding, InputVariationalDropout
-from allennlp.modules.matrix_attention.bilinear_matrix_attention import BilinearMatrixAttention
-from allennlp.modules import FeedForward
 from allennlp.models.model import Model
-from allennlp.nn import InitializerApplicator, Activation
-from allennlp.nn.util import min_value_of_dtype
+from allennlp.nn import InitializerApplicator
 from allennlp.nn.util import get_text_field_mask
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
-from allennlp.training.metrics import F1Measure
+from allennlp.nn.util import masked_softmax
 from spigot.differentiable_eisner import differentiable_eisner
 # from spigot.syntactically_informed_graph_parser import SyntacticallyInformedGraphParser
 # from spigot.biaffine_parser import MyBiaffineDependencyParser
@@ -39,6 +33,7 @@ class SyntacticThenSemanticParser(Model):
         decay_syntactic_loss: float = 0.5,
         freeze_syntactic_parser: bool = False,
         edge_prediction_threshold: float = 0.5,
+        initializer: InitializerApplicator = InitializerApplicator(),
         **kwargs
     ) -> None:
         super().__init__(vocab, **kwargs)
@@ -58,6 +53,7 @@ class SyntacticThenSemanticParser(Model):
         self.decay_syntactic_loss = decay_syntactic_loss
         self.freeze_syntactic_parser = freeze_syntactic_parser
         self.edge_prediction_threshold = edge_prediction_threshold
+        initializer(self)
 
     @overrides
     def forward(
@@ -102,7 +98,7 @@ class SyntacticThenSemanticParser(Model):
         mask_with_root_token = torch.cat(
                 [mask.new_ones((batch_size, 1)), mask], dim=1)
         predicted_heads = differentiable_eisner(
-                torch.softmax(attended_arcs, dim=2),
+                masked_softmax(attended_arcs, mask_with_root_token, dim=2),
                 mask_with_root_token)
         semantic_outputs = self.semantic_parser(
                 words=words,

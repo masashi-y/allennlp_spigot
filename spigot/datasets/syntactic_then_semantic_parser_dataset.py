@@ -81,15 +81,20 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
                 assert is_tree(heads), ', '.join(str(head) for head in heads)
                 head_tags = [normalize_deprel(word["deprel"]) for word in annotated_sentence]
                 yield self.text_to_instance(
-                    tokens, heads, head_tags, pos_tags, directed_arc_indices, arc_tags)
+                    words=tokens,
+                    pos_tags=pos_tags,
+                    heads=heads,
+                    head_tags=head_tags,
+                    arc_indices=directed_arc_indices,
+                    arc_tags=arc_tags)
 
     @overrides
     def text_to_instance(
         self,  # type: ignore
         words: List[str],
-        heads: List[int],
-        head_tags: List[str],
-        pos_tags: List[str] = None,
+        pos_tags: List[str],
+        heads: List[int] = None,
+        head_tags: List[str] = None,
         arc_indices: List[Tuple[int, int]] = None,
         arc_tags: List[str] = None,
     ) -> Instance:
