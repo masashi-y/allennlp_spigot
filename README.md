@@ -1,5 +1,6 @@
-
 **This repository is currently in early development state.**
+
+![example seamntic dependencies](./images/example.png)
 
 
 # PyTorch (+ AllenNLP) Reimplementation of [SPIGOT](https://arxiv.org/abs/1805.04658v1) Parser
@@ -8,13 +9,10 @@ This repo tries to reimplement a pipeline system of a syntactic-then-semantic pa
 trained end-to-end using the technique, called "SPIGOT", proposed in ACL2018 paper
 [Backpropagating through Structured Argmax using a SPIGOT](https://arxiv.org/abs/1805.04658v1) by Peng et al.
 
-![example seamntic dependencies](./images/example.png)
-
 
 ## [SemEval 2015](http://alt.qcri.org/semeval2015/task18/) Broad-Coverage Semantic Dependency Parsing
 
 The dataset is available at [LDC](https://catalog.ldc.upenn.edu/LDC2016T10).
-
 
 ## Running the code
 
@@ -52,6 +50,11 @@ $ allennlp train --include-package spigot --serialization-dir results configs/sy
 |-| - | - |
 |-| - | - |
 
+## Differences between the original and this implementations
+
+- The use of AD3 for decoding semantic dependencies is currently future work, and just outputs edges with the probabilities more than predefined threshold (default: 0.5) and assigns the most probable tags to them.
+  - As such, training is done by minimizing the negative log probabilities of these edges and labels, instead of using SSVM loss.
+- While the original implementation processes examples one-by-one at training, ours runs on mini-batches.
 
 ## Citation Information
 
