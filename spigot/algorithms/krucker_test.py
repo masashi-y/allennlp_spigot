@@ -23,22 +23,42 @@ def test():
     print(torch.allclose(py_res, cpp_res, ))
 
 
-if __name__ == '__main__':
-    for _ in range(10):
-        test()
-    print(project_onto_knapsack_constraint_batch(torch.tensor([[-10, -10000, 0], [-10, -10000, -10]]).float()))
+def test2(size):
+    import time
+    device = torch.device('cpu')
+    batch_size = 32
+    xs = torch.randn(32, size).float().to(device)
+    batch_start = time.time()
+    batch_res = project_onto_knapsack_constraint_batch(xs)
+    batch_elapsed = time.time() - batch_start
+    non_batch_start = time.time()
+    non_batch_res = torch.stack([project_onto_knapsack_constraint(x) for x in xs])
+    non_batch_elapsed = time.time() - non_batch_start
+    print(f'size of the problem: {size}')
+    print(f'batch and non batch all close: {torch.allclose(batch_res, non_batch_res)}')
+    print(f'batch elapsed time: {batch_elapsed} sec')
+    print(f'not batch elapsed time: {non_batch_elapsed} sec')
+    print('=======================================================\n')
 
-    for i in range(10000):
-        x = torch.randint(0, 100, (5,)).float()
-        x[2:4] = torch.randint(-1000, 0, (2,)).float()
-        res0 = project_onto_knapsack_constraint(x)
-        weights = torch.ones((9,), dtype=torch.float)
-        weights[5:] = 0.
-        x = torch.cat([x, torch.zeros((4,), dtype=torch.float)])
-        res1 = project_onto_knapsack_constraint(x, weights)[:5]
-        if not torch.allclose(res0, res1):
-            raise 'aaaaaaaaaaa'
-        else:
-            print(x)
-            print(res0)
-            print()
+
+if __name__ == '__main__':
+    for size in [10, 50, 100, 200]:
+        test2(size)
+    # for _ in range(10):
+    #     test()
+    # print(project_onto_knapsack_constraint_batch(torch.tensor([[-10, -10000, 0], [-10, -10000, -10]]).float()))
+    # 
+    # for i in range(10000):
+    #     x = torch.randint(0, 100, (5,)).float()
+    #     x[2:4] = torch.randint(-1000, 0, (2,)).float()
+    #     res0 = project_onto_knapsack_constraint(x)
+    #     weights = torch.ones((9,), dtype=torch.float)
+    #     weights[5:] = 0.
+    #     x = torch.cat([x, torch.zeros((4,), dtype=torch.float)])
+    #     res1 = project_onto_knapsack_constraint(x, weights)[:5]
+    #     if not torch.allclose(res0, res1):
+    #         raise 'aaaaaaaaaaa'
+    #     else:
+    #         print(x)
+    #         print(res0)
+    #         print()
