@@ -101,8 +101,9 @@ class SyntacticThenSemanticParser(Model):
         batch_size, _ = mask.size()
         mask_with_root_token = torch.cat(
                 [mask.new_ones((batch_size, 1)), mask], dim=1)
-        attended_arcs = torch.softmax(attended_arcs, dim=2)
-        predicted_heads = differentiable_eisner(attended_arcs, mask_with_root_token)
+        predicted_heads = differentiable_eisner(
+                torch.softmax(attended_arcs, dim=2),
+                mask_with_root_token)
         semantic_outputs = self.semantic_parser(
                 words=words,
                 head_indices=predicted_heads[:, 1:],

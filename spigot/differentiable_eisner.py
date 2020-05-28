@@ -18,7 +18,9 @@ class DifferentiableEisner(torch.autograd.Function):
         batch_size, seq_len, _ = x.size()
         norm = torch.norm(grad_output)
         scale = ctx.threshold / norm if norm > ctx.threshold else 1.
+        # single headed constraints (all heads scores for a single token must sum to one)
         target = (x - scale * grad_output).view(batch_size * seq_len, seq_len)
+        # do not perform projection on masked items
         target = torch.masked_select(target, mask_flat[:, None]).view(-1, seq_len)
         projected = project_onto_knapsack_constraint_batch(target)
         output = torch.where(mask[:, :, None].bool(), x, torch.zeros_like(x))
