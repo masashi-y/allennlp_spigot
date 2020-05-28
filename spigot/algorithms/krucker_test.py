@@ -25,17 +25,19 @@ def test():
 
 def test2(size):
     import time
-    device = torch.device('cpu')
-    batch_size = 32
-    xs = torch.randn(32, size).float().to(device)
+    device = torch.device(0)
+    batch_size = 128 * 20
+    xs = torch.randn(batch_size, size).float().to(device)
     batch_start = time.time()
     batch_res = project_onto_knapsack_constraint_batch(xs)
     batch_elapsed = time.time() - batch_start
     non_batch_start = time.time()
     non_batch_res = torch.stack([project_onto_knapsack_constraint(x) for x in xs])
     non_batch_elapsed = time.time() - non_batch_start
+    max_diff = (non_batch_res - batch_res).abs().max()
     print(f'size of the problem: {size}')
     print(f'batch and non batch all close: {torch.allclose(batch_res, non_batch_res)}')
+    print(f'max difference: {max_diff}')
     print(f'batch elapsed time: {batch_elapsed} sec')
     print(f'not batch elapsed time: {non_batch_elapsed} sec')
     print('=======================================================\n')
