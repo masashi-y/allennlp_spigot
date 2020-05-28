@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 @Model.register("my_biaffine_parser")
 class MyBiaffineDependencyParser(BiaffineDependencyParser):
+    """Minor extension of the original `allennlp_models.syntax.BiaffineDependencyParser`
+    so that this classes forward function returns `attended_arcs` tensor as well.
+    """
     @overrides
     def forward(
         self,  # type: ignore
