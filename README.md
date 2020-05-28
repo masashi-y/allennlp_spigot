@@ -1,9 +1,42 @@
 
-# PyTorch (+ AllenNLP) Reimplementation of [SPIGOT](https://arxiv.org/abs/1805.04658v1) Syntactic-then-semantic Parser
+**This repository is currently in early development state.**
 
-This repo tries to reimplement a pipeline system of syntactic and semantic parsers, trained end-to-end, using the technique, called "SPIGOT", proposed in ACL2018 paper [Backpropagating through Structured Argmax using a SPIGOT](https://arxiv.org/abs/1805.04658v1) by Peng et al.
+
+# PyTorch (+ AllenNLP) Reimplementation of [SPIGOT](https://arxiv.org/abs/1805.04658v1) Parser
+
+This repo tries to reimplement a pipeline system of a syntactic-then-semantic parser,
+trained end-to-end using the technique, called "SPIGOT", proposed in ACL2018 paper
+[Backpropagating through Structured Argmax using a SPIGOT](https://arxiv.org/abs/1805.04658v1) by Peng et al.
+
+![example seamntic dependencies](./images/example.png)
+
 
 ## [SemEval 2015](http://alt.qcri.org/semeval2015/task18/) Broad-Coverage Semantic Dependency Parsing
+
+The dataset is available at [LDC](https://catalog.ldc.upenn.edu/LDC2016T10).
+
+
+## Running the code
+
+Please refer to `requirements.txt` for the versions of libraries used in the reproduction.
+
+```sh
+$ pip install torch allennlp allennlp-models
+$ git clone https://github.com/masashi-y/allennlp_spigot
+```
+
+For the SemEval datasets, please use the script in the `semeval2015_data` directory to preprocess
+(I borrowed this from the [NeurboParser](https://github.com/Noahs-ARK/NeurboParser) repo and modified so it works with Python 3).
+This will create the train/dev/test files for the respective semantic dependency types, `english_id_dm_augmented_test.sdp` (english, in-domain, DM-formalism, augmented with syntactic dependencies, test split).
+
+
+For training (in the `allennlp_spigot` directory),
+
+```sh
+$ allennlp train --include-package spigot --serialization-dir results configs/syntactic_then_semantic_dependencies.jsonnet
+```
+
+## Results
 
 (from their paper)
 
@@ -18,22 +51,6 @@ This repo tries to reimplement a pipeline system of syntactic and semantic parse
 |:---:|:---:|:---:|
 |-| - | - |
 |-| - | - |
-
-## Running the code
-
-Please refer to `requirements.txt` for the versions of libraries used in the reproduction.
-
-```sh
-pip install torch allennlp allennlp-models git+https://github.com/masashi-y/allennlp_spigot
-```
-
-For training,
-
-```sh
-allennlp train --include-package spigot --serialization-dir results configs/syntactic_then_semantic_dependencies.jsonnet
-```
-
-
 
 
 ## Citation Information
