@@ -100,7 +100,8 @@ class SyntacticThenSemanticParser(Model):
         mask = get_text_field_mask(words)
         batch_size, _ = mask.size()
         mask_with_root_token = torch.cat(
-                [mask.new_zeros((batch_size,1)), mask], dim=1)
+                [mask.new_ones((batch_size, 1)), mask], dim=1)
+        attended_arcs = torch.softmax(attended_arcs, dim=2)
         predicted_heads = differentiable_eisner(attended_arcs, mask_with_root_token)
         semantic_outputs = self.semantic_parser(
                 words=words,
@@ -108,7 +109,6 @@ class SyntacticThenSemanticParser(Model):
                 pos_tags=pos_tags,
                 metadata=metadata,
                 arc_tags=arc_tags)
-
 
         output_dict = {
             'heads': syntactic_outputs['heads'],

@@ -29,6 +29,16 @@ def normalize_deprel(label):
         return 'partmod'
     return label
 
+def is_tree(indices):
+    def rec(i):
+        checked[i] = True
+        for self, head in enumerate(indices, 1):
+            if head == i:
+                rec(self)
+    checked = [False for _ in range(len(indices) + 1)]
+    rec(0)
+    return all(checked)
+
 
 @DatasetReader.register("syntactic_then_semantic")
 class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDatasetReader):
@@ -61,6 +71,7 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
                 tokens = [word["form"] for word in annotated_sentence]
                 pos_tags = [normalize_postag(word["pos"]) for word in annotated_sentence]
                 heads = [int(word["head"]) for word in annotated_sentence]
+                assert is_tree(heads), ', '.join(str(head) for head in heads)
                 head_tags = [normalize_deprel(word["deprel"]) for word in annotated_sentence]
                 yield self.text_to_instance(
                     tokens, heads, head_tags, pos_tags, directed_arc_indices, arc_tags)
