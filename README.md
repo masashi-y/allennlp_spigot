@@ -6,7 +6,7 @@
 # PyTorch (+ AllenNLP) Reimplementation of [SPIGOT](https://arxiv.org/abs/1805.04658v1) Parser
 
 This repo tries to reimplement a pipeline system of a syntactic-then-semantic parser,
-trained end-to-end using the technique, called "SPIGOT", proposed in ACL2018 paper
+trained end-to-end using the technique called "SPIGOT", proposed in ACL2018 paper
 [Backpropagating through Structured Argmax using a SPIGOT](https://arxiv.org/abs/1805.04658v1) by Peng et al.
 
 
@@ -25,13 +25,27 @@ $ git clone https://github.com/masashi-y/allennlp_spigot
 
 For the SemEval datasets, please use the script in the `semeval2015_data` directory to preprocess
 (I borrowed this from the [NeurboParser](https://github.com/Noahs-ARK/NeurboParser) repo and modified so it works with Python 3).
-This will create the train/dev/test files for the respective semantic dependency types, `english_id_dm_augmented_test.sdp` (english, in-domain, DM-formalism, augmented with syntactic dependencies, test split).
+This will create the train/dev/test split files for the respective semantic dependency types, named such as `english_id_dm_augmented_test.sdp` (english, in-domain, DM-formalism, augmented with syntactic dependencies, test split).
 
 
-For training (in the `allennlp_spigot` directory),
+For training, first configure paths in `configs/syntactic_then_semantic_dependencies.jsonnet`, and then (in the `allennlp_spigot` directory):
 
 ```sh
 $ allennlp train --include-package spigot --serialization-dir results configs/syntactic_then_semantic_dependencies.jsonnet
+```
+
+For prediction,
+
+when using a \*.sdp file as input and use the annotated POS tags:
+```sh
+$ allennlp predict --use-dataset-reader --predictor semantic_dependencies_predictor --include-package spigot --silent --output-file system.sdp results/model.tar.gz english_id_dm_augmented_test.sdp
+```
+
+when using raw texts an input and use POS tags predicted by a spaCy model (default: `en_core_web_sm`):
+```sh
+$ cat input.jsonl
+{"sentence": "this is an example sentence."}
+$ allennlp predict --predictor semantic_dependencies_predictor --include-package spigot --silent --output-file system.sdp results/model.tar.gz input.jsonl
 ```
 
 ## Results
@@ -52,9 +66,8 @@ $ allennlp train --include-package spigot --serialization-dir results configs/sy
 
 ## Differences between the original and this implementations
 
-- The use of AD3 for decoding semantic dependencies is currently future work, and just outputs edges with the probabilities more than predefined threshold (default: 0.5) and assigns the most probable tags to them.
-  - As such, training is done by minimizing the negative log probabilities of these edges and labels, instead of using SSVM loss.
-- While the original implementation processes examples one-by-one at training, ours runs on mini-batches.
+- The use of AD3 for decoding semantic dependencies is currently future work, and this implementation just outputs edges with the probabilities more than predefined threshold (default: 0.5) and assigns the most probable tags to them.
+  - As such, training is done by minimizing the negative log probabilities of these edges and labels, instead of using the SSVM loss.
 
 ## Citation Information
 
