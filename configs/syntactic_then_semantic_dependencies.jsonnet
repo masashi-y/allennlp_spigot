@@ -6,7 +6,7 @@
   dataset_reader: {
     type: 'syntactic_then_semantic',
   },
-  dataset_reader: {
+  validation_dataset_reader: {
     type: 'syntactic_then_semantic',
     skip_when_no_arcs: false
   },

@@ -13,6 +13,19 @@ from allennlp.data.tokenizers import Token
 
 logger = logging.getLogger(__name__)
 
+def normalize_postag(pos):
+    if pos == '(':
+        return '-LRB-'
+    elif pos == ')':
+        return '-RRB-'
+    else:
+        return pos
+
+def normalize_deprel(label):
+    if label == 'vmod':
+        return 'partmod'
+    return label
+
 
 @DatasetReader.register("sdp2015_dependencies")
 class SDP2015CompanionDependencies(UniversalDependenciesDatasetReader):
@@ -27,9 +40,9 @@ class SDP2015CompanionDependencies(UniversalDependenciesDatasetReader):
                 if not directed_arc_indices:
                     continue
                 tokens = [word["form"] for word in annotated_sentence]
-                pos_tags = [word["pos"] for word in annotated_sentence]
+                pos_tags = [normalize_postag(word["pos"]) for word in annotated_sentence]
                 heads = [int(word["head"]) for word in annotated_sentence]
-                tags = [word["deprel"] for word in annotated_sentence]
+                tags = [normalize_deprel(word["deprel"]) for word in annotated_sentence]
                 yield self.text_to_instance(tokens, pos_tags, list(zip(tags, heads)))
 
     @overrides

@@ -17,7 +17,9 @@
     type: 'syntactic_then_semantic',
     share_text_field_embedder: false,
     share_pos_tag_embedding: false,
-    decay_syntactic_loss: 0.1,
+    gumbel_sampling: true,
+    stop_syntactic_training_at_epoch: 40,
+    decay_syntactic_loss: 1.0,
     freeze_syntactic_parser: false,
     edge_prediction_threshold: 0.5,
     syntactic_parser: {
@@ -114,7 +116,7 @@
     num_epochs: 80,
     grad_clipping: 1.0,
     patience: 50,
-    cuda_device: 2,
+    cuda_device: 0,
     validation_metric: '+f1',
     optimizer: {
       type: 'adam',

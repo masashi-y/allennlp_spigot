@@ -14,6 +14,7 @@ from allennlp.nn.util import get_text_field_mask
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
 from allennlp.nn.util import masked_softmax
 from spigot.differentiable_eisner import differentiable_eisner
+from spigot.utils import masked_gumbel_softmax
 # from spigot.syntactically_informed_graph_parser import SyntacticallyInformedGraphParser
 # from spigot.biaffine_parser import MyBiaffineDependencyParser
 
@@ -33,6 +34,8 @@ class SyntacticThenSemanticParser(Model):
         decay_syntactic_loss: float = 0.5,
         freeze_syntactic_parser: bool = False,
         edge_prediction_threshold: float = 0.5,
+        gumbel_sampling: bool = False,
+        stop_syntactic_training_at_epoch: int = None,
         initializer: InitializerApplicator = InitializerApplicator(),
         **kwargs
     ) -> None:
@@ -53,7 +56,16 @@ class SyntacticThenSemanticParser(Model):
         self.decay_syntactic_loss = decay_syntactic_loss
         self.freeze_syntactic_parser = freeze_syntactic_parser
         self.edge_prediction_threshold = edge_prediction_threshold
+        self.gumbel_sampling = gumbel_sampling
+        self.stop_syntactic_training_at_epoch = stop_syntactic_training_at_epoch
+        self.epoch = 0
         initializer(self)
+
+    @overrides
+    def eval(self):
+        # is this the right way to count the number of epochs from within a model?
+        super().eval()
+        self.epoch += 1
 
     @overrides
     def forward(
@@ -92,13 +104,22 @@ class SyntacticThenSemanticParser(Model):
                 metadata=metadata,
                 head_tags=head_tags,
                 head_indices=head_indices)
+
         attended_arcs = syntactic_outputs['attended_arcs']
         mask = get_text_field_mask(words)
         batch_size, _ = mask.size()
         mask_with_root_token = torch.cat(
                 [mask.new_ones((batch_size, 1)), mask], dim=1)
+
+        if self.gumbel_sampling:
+            attended_arcs = masked_gumbel_softmax(
+                    attended_arcs, mask_with_root_token, dim=2)
+        else:
+            attended_arcs = masked_softmax(
+                    attended_arcs, mask_with_root_token, dim=2)
+
         predicted_heads = differentiable_eisner(
-                masked_softmax(attended_arcs, mask_with_root_token, dim=2),
+                attended_arcs,
                 mask_with_root_token)
         semantic_outputs = self.semantic_parser(
                 words=words,
@@ -126,7 +147,11 @@ class SyntacticThenSemanticParser(Model):
             output_dict['semantic_tag_loss'] = semantic_outputs['tag_loss']
 
         if head_indices is not None and arc_tags is not None:
-            if self.freeze_syntactic_parser:
+            if (
+                self.freeze_syntactic_parser or
+                self.stop_syntactic_training_at_epoch is not None and
+                self.stop_syntactic_training_at_epoch <= self.epoch
+            ):
                 loss = semantic_outputs['loss']
             else:
                 loss = semantic_outputs['loss'] + \
