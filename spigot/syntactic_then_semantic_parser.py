@@ -111,7 +111,7 @@ class SyntacticThenSemanticParser(Model):
         mask_with_root_token = torch.cat(
                 [mask.new_ones((batch_size, 1)), mask], dim=1)
 
-        if self.gumbel_sampling:
+        if self.training and self.gumbel_sampling:
             attended_arcs = masked_gumbel_softmax(
                     attended_arcs, mask_with_root_token, dim=2)
         else:
