@@ -50,19 +50,19 @@ $ allennlp predict --predictor semantic_dependencies_predictor --include-package
 
 ## Results
 
-(from their paper)
+(in-domain results in UF/LF)
 
-|Model| - | - |
-|:---:|:---:|:---:|
-|-| - | - |
-|-| - | - |
+|Model| DM | PAS | PSD |
+|:---:|:---:|:---:|:---:|
+| Pipeline | 88.93/87.64 | 91.56/90.48 | 86.44/74.41 |
+| SPIGOT | 89.11/87.89 | 91.54/90.38 | 86.45/73.92 |
 
-(reproduced result by me)
+(out-of-domain results in UF/LF)
 
-|Model| - | - |
-|:---:|:---:|:---:|
-|-| - | - |
-|-| - | - |
+|Model| DM | PAS | PSD |
+|:---:|:---:|:---:|:---:|
+|Pipeline | 83.03/81.08 | 87.19/85.46 | 80.97/68.79 |
+| SPIGOT | 82.88/80.64 | 87.14/85.48 | 80.75/67.84 |
 
 ## Differences between the original and this implementations
 
