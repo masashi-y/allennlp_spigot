@@ -15,6 +15,7 @@ from allennlp.nn.util import get_lengths_from_binary_sequence_mask
 from allennlp.nn.util import masked_softmax
 from spigot.differentiable_eisner import differentiable_eisner
 from spigot.utils import masked_gumbel_softmax
+from allennlp.training.metrics import F1Measure
 # from spigot.syntactically_informed_graph_parser import SyntacticallyInformedGraphParser
 # from spigot.biaffine_parser import MyBiaffineDependencyParser
 
@@ -59,6 +60,9 @@ class SyntacticThenSemanticParser(Model):
         self.gumbel_sampling = gumbel_sampling
         self.stop_syntactic_training_at_epoch = stop_syntactic_training_at_epoch
         self.epoch = 0
+        # just out of curiosity, this evaluates if syntactic dependencies evolve
+        # closer to semantic dependencies, when no syn. supervision signal available?
+        self._unlabelled_f1 = F1Measure(positive_label=1)
         initializer(self)
 
     @overrides
@@ -146,6 +150,18 @@ class SyntacticThenSemanticParser(Model):
             output_dict['semantic_arc_loss'] = semantic_outputs['arc_loss']
             output_dict['semantic_tag_loss'] = semantic_outputs['tag_loss']
 
+            arc_indices = (arc_tags != -1).float()
+            tag_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
+            predicted_heads = predicted_heads[:, 1:, 1:]
+            one_minus_predicted_heads = 1 - predicted_heads
+            # We stack scores here because the f1 measure expects a
+            # distribution, rather than a single value.
+            self._unlabelled_f1(
+                torch.stack([one_minus_predicted_heads, predicted_heads], -1),
+                arc_indices, tag_mask
+            )
+
+
         if head_indices is not None and arc_tags is not None:
             if (
                 self.freeze_syntactic_parser or
@@ -195,9 +211,13 @@ class SyntacticThenSemanticParser(Model):
         metrics = {}
         precision, recall, f1_measure = \
                 self.semantic_parser._unlabelled_f1.get_metric(reset)
-        attachment_scores = self.syntactic_parser.get_metrics(reset)
         metrics["precision"] = precision
         metrics["recall"] = recall
         metrics["f1"] = f1_measure
+        precision, recall, f1_measure = self._unlabelled_f1.get_metric(reset)
+        metrics["dep_precision"] = precision
+        metrics["dep_recall"] = recall
+        metrics["dep_f1"] = f1_measure
+        attachment_scores = self.syntactic_parser.get_metrics(reset)
         metrics["UAS"] = attachment_scores["UAS"]
         return metrics

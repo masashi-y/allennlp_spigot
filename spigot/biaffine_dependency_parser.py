@@ -8,7 +8,7 @@ from allennlp.common.checks import ConfigurationError
 from allennlp.data import TextFieldTensors, Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn.util import get_text_field_mask
-from allennlp_models.syntax import BiaffineDependencyParser
+from allennlp_models.structured_prediction import BiaffineDependencyParser
 
 
 logger = logging.getLogger(__name__)

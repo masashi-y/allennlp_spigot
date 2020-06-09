@@ -1,5 +1,5 @@
 
-from allennlp_models.syntax.semantic_dependencies.semantic_dependencies_reader import lazy_parse
+from allennlp_models.structured_prediction.dataset_readers.semantic_dependencies import lazy_parse
 
 
 def _render_displacy_format(annotated_sentence, arc_indices, arc_tags):

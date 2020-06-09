@@ -2,10 +2,10 @@ from typing import Dict, List, Tuple
 import logging
 from overrides import overrides
 
-from allennlp_models.syntax import SemanticDependenciesDatasetReader
+from allennlp_models.structured_prediction.dataset_readers.semantic_dependencies import SemanticDependenciesDatasetReader
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp_models.syntax.semantic_dependencies.semantic_dependencies_reader import lazy_parse
+from allennlp_models.structured_prediction.dataset_readers.semantic_dependencies import lazy_parse
 
 from allennlp.data.fields import AdjacencyField, MetadataField, SequenceLabelField
 from allennlp.data.fields import Field, TextField

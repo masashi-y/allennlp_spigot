@@ -6,8 +6,8 @@ from allennlp.common.file_utils import cached_path
 from allennlp.data.fields import Field, TextField, SequenceLabelField, MetadataField
 from allennlp.data.instance import Instance
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp_models.syntax import UniversalDependenciesDatasetReader
-from allennlp_models.syntax.semantic_dependencies.semantic_dependencies_reader import lazy_parse
+from allennlp_models.structured_prediction.dataset_readers.universal_dependencies import UniversalDependenciesDatasetReader
+from allennlp_models.structured_prediction.dataset_readers.semantic_dependencies import lazy_parse
 from allennlp.data.tokenizers import Token
 
 
