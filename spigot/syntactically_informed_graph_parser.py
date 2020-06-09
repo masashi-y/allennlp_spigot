@@ -17,7 +17,7 @@ from allennlp.nn import InitializerApplicator, Activation
 from allennlp.nn.util import min_value_of_dtype
 from allennlp.nn.util import get_text_field_mask
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
-from allennlp.training.metrics import F1Measure
+from spigot.metrics.semantic_dependencies_f1 import SemanticDependenciesF1
 import spigot
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ class SyntacticallyInformedGraphParser(Model):
             "arc feedforward output dim",
         )
 
-        self._unlabelled_f1 = F1Measure(positive_label=1)
+        self._labelled_f1 = SemanticDependenciesF1()
         self._arc_loss = torch.nn.BCEWithLogitsLoss(reduction="none")
         self._tag_loss = torch.nn.CrossEntropyLoss(reduction="none")
         initializer(self)
@@ -199,16 +199,11 @@ class SyntacticallyInformedGraphParser(Model):
             output_dict["arc_loss"] = arc_nll
             output_dict["tag_loss"] = tag_nll
 
-            # Make the arc tags not have negative values anywhere
-            # (by default, no edge is indicated with -1).
-            arc_indices = (arc_tags != -1).float()
-            tag_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
-            one_minus_arc_probs = 1 - arc_probs
-            # We stack scores here because the f1 measure expects a
-            # distribution, rather than a single value.
-            self._unlabelled_f1(
-                torch.stack([one_minus_arc_probs, arc_probs], -1), arc_indices, tag_mask
-            )
+            predicted_arcs = arc_probs > self.edge_prediction_threshold
+            predicted_arc_tags = arc_tag_probs.argmax(-1)
+            predicted_arc_tags[predicted_arcs.logical_not()] = -1
+
+            self._labelled_f1(predicted_arc_tags, arc_tags, mask)
 
         return output_dict
 
@@ -335,9 +330,4 @@ class SyntacticallyInformedGraphParser(Model):
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        metrics = {}
-        precision, recall, f1_measure = self._unlabelled_f1.get_metric(reset)
-        metrics["precision"] = precision
-        metrics["recall"] = recall
-        metrics["f1"] = f1_measure
-        return metrics
+        return self._labelled_f1.get_metric(reset)
