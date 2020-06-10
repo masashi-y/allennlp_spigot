@@ -31,7 +31,7 @@ class SemanticDependenciesF1(Metric):
         predicted_arcs = (predicted_arc_tags >= 0).long()
         gold_arcs = (gold_arc_tags >= 0).long()
         mask = mask.unsqueeze(1) * mask.unsqueeze(2)
-        # import IPython; IPython.embed(); exit(1)
+
         labeled_correct = predicted_arc_tags.eq(gold_arc_tags) \
                 .logical_and(predicted_arcs) \
                 .logical_and(gold_arcs) \
@@ -53,9 +53,6 @@ class SemanticDependenciesF1(Metric):
         unlabeled_fscore = (2 * unlabeled_precision * unlabeled_recall) / (unlabeled_precision + unlabeled_recall)
         unlabeled_fscore[self._unlabeled_correct == 0] = 0.0
 
-        print('correct', self._labeled_correct.item())
-        print('pred', self._pred_sum.item())
-        print('true', self._true_sum.item())
         if reset:
             self.reset()
         return {
