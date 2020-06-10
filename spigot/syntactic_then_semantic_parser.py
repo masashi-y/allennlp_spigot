@@ -64,6 +64,7 @@ class SyntacticThenSemanticParser(Model):
         self.stop_syntactic_training_at_epoch = stop_syntactic_training_at_epoch
         self.epoch = 0
         self.optimizer_config = optimizer_config or {'iterations': 1}
+        print('aaa', self.optimizer_config)
         # just out of curiosity, this evaluates if syntactic dependencies evolve
         # closer to semantic dependencies, when no syn. supervision signal available?
         self._unlabelled_f1 = F1Measure(positive_label=1)
@@ -130,7 +131,7 @@ class SyntacticThenSemanticParser(Model):
                 attended_arcs,
                 mask_with_root_token)[:, 1:]
 
-        if self.optimizer_config.iterations <= 1 or not self.training:
+        if self.optimizer_config['iterations'] <= 1 or not self.training:
             semantic_outputs = self.semantic_parser(
                     words=words,
                     head_indices=predicted_heads,
@@ -139,10 +140,14 @@ class SyntacticThenSemanticParser(Model):
                     arc_tags=arc_tags)
         else:
             # disable flow of grads through differentiable_eisner
-            predicted_heads = predicted_heads.detach().requires_grad_(True)
+            predicted_heads = predicted_heads.clone().detach().requires_grad_(True)
 
             def projection(ys):
-                return project_onto_knapsack_constraint_batch(ys, mask)
+                batch_size, sequence_length, _ = ys.size()
+                ys = project_onto_knapsack_constraint_batch(
+                        ys.view(batch_size * sequence_length, -1),
+                        mask.flatten().bool())
+                return ys.view(batch_size, sequence_length, -1)
 
             opt = GradientDescentOptimizer(
                 projection=projection,
@@ -150,7 +155,7 @@ class SyntacticThenSemanticParser(Model):
                 lr=self.optimizer_config.get('lr', 0.1),
                 use_sqrt_decay=self.optimizer_config.get('use_sqrt_decay', False))
 
-            for _ in range(self.optimizer_config.iterations):
+            for _ in range(self.optimizer_config['iterations']):
                 self.semantic_parser.zero_grad()
                 semantic_outputs = self.semantic_parser(
                         words=words,
@@ -163,7 +168,14 @@ class SyntacticThenSemanticParser(Model):
                         loss=semantic_outputs['loss'],
                         ys=predicted_heads)
 
-            predicted_heads = predicted_heads.requires_grad_(False)
+            predicted_heads = predicted_heads.clone().detach().requires_grad_(False)
+            self.semantic_parser.zero_grad()
+            semantic_outputs = self.semantic_parser(
+                    words=words,
+                    head_indices=predicted_heads,
+                    pos_tags=pos_tags,
+                    metadata=metadata,
+                    arc_tags=arc_tags)
 
         output_dict = {
             'heads': syntactic_outputs['heads'],
@@ -193,7 +205,7 @@ class SyntacticThenSemanticParser(Model):
 
             loss += semantic_outputs['loss']
 
-            if self.iterations > 1:
+            if self.optimizer_config['iterations'] > 1:
                 loss += kl_divergence(
                         attended_arcs[:, 1:],
                         predicted_heads,
