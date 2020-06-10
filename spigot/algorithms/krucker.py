@@ -66,7 +66,7 @@ def get_item(x, k):
     return x.gather(1, k).squeeze(1)
 
 
-def project_onto_knapsack_constraint_batch(xs):
+def _project_onto_knapsack_constraint_batch(xs):
     n, d = xs.size()
     inf_tensor = xs.new_full((n, 1), INF)
     lower_bounds = torch.cat([- xs, inf_tensor], axis=1)
@@ -123,9 +123,20 @@ def project_onto_knapsack_constraint_batch(xs):
     lower_bounds = lower_bounds[:, :-1]
     upper_bounds = upper_bounds[:, :-1]
     left, right = left[:, None], right[:, None]
-    # from IPython.core.debugger import Pdb; Pdb().set_trace()
+
     solution[lower_bounds >= right] = lower_bounds[lower_bounds >= right]
     solution[upper_bounds <= left] = upper_bounds[upper_bounds <= left]
     return xs + solution
 
 
+def project_onto_knapsack_constraint_batch(xs, mask=None, padding=0.):
+    if mask is None:
+        return _project_onto_knapsack_constraint_batch(xs)
+    assert len(mask.size()) == 1
+    assert xs.size(0) == len(mask)
+    _, d = xs.size()
+    targets = torch.masked_select(xs, mask[:, None]).view(-1, d)
+    projected = _project_onto_knapsack_constraint_batch(targets)
+    output = torch.ones_like(xs) * padding
+    output[mask] = projected
+    return output

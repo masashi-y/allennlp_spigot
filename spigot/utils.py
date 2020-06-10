@@ -65,3 +65,7 @@ def masked_gumbel_softmax(
     return result
 
 
+def kl_divergence(qs, ps, mask):
+    eps = tiny_value_of_dtype(ps.dtype)
+    outputs = torch.sum(ps * (torch.log(ps + eps) - torch.log(qs + eps)), dim=-1)
+    return (outputs * mask).mean()

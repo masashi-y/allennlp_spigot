@@ -14,8 +14,10 @@ from allennlp.nn.util import get_text_field_mask
 from allennlp.nn.util import get_lengths_from_binary_sequence_mask
 from allennlp.nn.util import masked_softmax
 from spigot.differentiable_eisner import differentiable_eisner
-from spigot.utils import masked_gumbel_softmax
+from spigot.utils import masked_gumbel_softmax, kl_divergence
 from allennlp.training.metrics import F1Measure
+from spigot.optim import GradientDescentOptimizer
+from spigot.algorithms.krucker import project_onto_knapsack_constraint_batch
 # from spigot.syntactically_informed_graph_parser import SyntacticallyInformedGraphParser
 # from spigot.biaffine_parser import MyBiaffineDependencyParser
 
@@ -38,6 +40,7 @@ class SyntacticThenSemanticParser(Model):
         gumbel_sampling: bool = False,
         stop_syntactic_training_at_epoch: int = None,
         initializer: InitializerApplicator = InitializerApplicator(),
+        optimizer_config: Dict[str, Any] = None,
         **kwargs
     ) -> None:
         super().__init__(vocab, **kwargs)
@@ -60,6 +63,7 @@ class SyntacticThenSemanticParser(Model):
         self.gumbel_sampling = gumbel_sampling
         self.stop_syntactic_training_at_epoch = stop_syntactic_training_at_epoch
         self.epoch = 0
+        self.optimizer_config = optimizer_config or {'iterations': 1}
         # just out of curiosity, this evaluates if syntactic dependencies evolve
         # closer to semantic dependencies, when no syn. supervision signal available?
         self._unlabelled_f1 = F1Measure(positive_label=1)
@@ -124,13 +128,42 @@ class SyntacticThenSemanticParser(Model):
 
         predicted_heads = differentiable_eisner(
                 attended_arcs,
-                mask_with_root_token)
-        semantic_outputs = self.semantic_parser(
-                words=words,
-                head_indices=predicted_heads[:, 1:],
-                pos_tags=pos_tags,
-                metadata=metadata,
-                arc_tags=arc_tags)
+                mask_with_root_token)[:, 1:]
+
+        if self.optimizer_config.iterations <= 1 or not self.training:
+            semantic_outputs = self.semantic_parser(
+                    words=words,
+                    head_indices=predicted_heads,
+                    pos_tags=pos_tags,
+                    metadata=metadata,
+                    arc_tags=arc_tags)
+        else:
+            # disable flow of grads through differentiable_eisner
+            predicted_heads = predicted_heads.detach().requires_grad_(True)
+
+            def projection(ys):
+                return project_onto_knapsack_constraint_batch(ys, mask)
+
+            opt = GradientDescentOptimizer(
+                projection=projection,
+                track_higher_grads=False,
+                lr=self.optimizer_config.get('lr', 0.1),
+                use_sqrt_decay=self.optimizer_config.get('use_sqrt_decay', False))
+
+            for _ in range(self.optimizer_config.iterations):
+                self.semantic_parser.zero_grad()
+                semantic_outputs = self.semantic_parser(
+                        words=words,
+                        head_indices=predicted_heads,
+                        pos_tags=pos_tags,
+                        metadata=metadata,
+                        arc_tags=arc_tags)
+
+                predicted_heads = opt.step(
+                        loss=semantic_outputs['loss'],
+                        ys=predicted_heads)
+
+            predicted_heads = predicted_heads.requires_grad_(False)
 
         output_dict = {
             'heads': syntactic_outputs['heads'],
@@ -142,37 +175,40 @@ class SyntacticThenSemanticParser(Model):
             'pos': [meta['pos'] for meta in metadata],
         }
 
+        loss = 0.
         if head_indices is not None:
             output_dict['syntactic_arc_loss'] = syntactic_outputs['arc_loss']
             output_dict['syntactic_tag_loss'] = syntactic_outputs['tag_loss']
+
+            if not (
+                self.freeze_syntactic_parser or
+                self.stop_syntactic_training_at_epoch is not None and
+                self.stop_syntactic_training_at_epoch <= self.epoch
+            ):
+                loss += self.decay_syntactic_loss * syntactic_outputs['loss']
 
         if arc_tags is not None:
             output_dict['semantic_arc_loss'] = semantic_outputs['arc_loss']
             output_dict['semantic_tag_loss'] = semantic_outputs['tag_loss']
 
+            loss += semantic_outputs['loss']
+
+            if self.iterations > 1:
+                loss += kl_divergence(
+                        attended_arcs[:, 1:],
+                        predicted_heads,
+                        mask_with_root_token[:, 1])
+
             arc_indices = (arc_tags != -1).float()
             tag_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
-            predicted_heads = predicted_heads[:, 1:, 1:]
+            predicted_heads = predicted_heads[:, :, 1:]
             one_minus_predicted_heads = 1 - predicted_heads
-            # We stack scores here because the f1 measure expects a
-            # distribution, rather than a single value.
             self._unlabelled_f1(
                 torch.stack([one_minus_predicted_heads, predicted_heads], -1),
                 arc_indices, tag_mask
             )
 
-
-        if head_indices is not None and arc_tags is not None:
-            if (
-                self.freeze_syntactic_parser or
-                self.stop_syntactic_training_at_epoch is not None and
-                self.stop_syntactic_training_at_epoch <= self.epoch
-            ):
-                loss = semantic_outputs['loss']
-            else:
-                loss = semantic_outputs['loss'] + \
-                        self.decay_syntactic_loss * syntactic_outputs['loss']
-            output_dict['loss'] = loss
+        output_dict['loss'] = loss
 
         return output_dict
 
