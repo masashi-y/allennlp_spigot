@@ -18,8 +18,6 @@ from spigot.utils import masked_gumbel_softmax, kl_divergence
 from allennlp.training.metrics import F1Measure
 from spigot.optim import GradientDescentOptimizer
 from spigot.algorithms.krucker import project_onto_knapsack_constraint_batch
-# from spigot.syntactically_informed_graph_parser import SyntacticallyInformedGraphParser
-# from spigot.biaffine_parser import MyBiaffineDependencyParser
 
 
 logger = logging.getLogger(__name__)
@@ -30,8 +28,8 @@ class SyntacticThenSemanticParser(Model):
     def __init__(
         self,
         vocab: Vocabulary,
-        syntactic_parser: Model, #  BiaffineDependencyParser,
-        semantic_parser: Model,  #  SyntacticallyInformedGraphParser,
+        syntactic_parser: Model,
+        semantic_parser: Model,
         share_text_field_embedder: bool = True,
         share_pos_tag_embedding: bool = True,
         decay_syntactic_loss: float = 0.5,
@@ -64,11 +62,11 @@ class SyntacticThenSemanticParser(Model):
         self.stop_syntactic_training_at_epoch = stop_syntactic_training_at_epoch
         self.epoch = 0
         self.optimizer_config = optimizer_config or {'iterations': 1}
-        print('aaa', self.optimizer_config)
         # just out of curiosity, this evaluates if syntactic dependencies evolve
         # closer to semantic dependencies, when no syn. supervision signal available?
         self._unlabelled_f1 = F1Measure(positive_label=1)
         initializer(self)
+        print(self.semantic_parser)
 
     @overrides
     def eval(self):
@@ -140,7 +138,9 @@ class SyntacticThenSemanticParser(Model):
                     arc_tags=arc_tags)
         else:
             # disable flow of grads through differentiable_eisner
-            predicted_heads = predicted_heads.clone().detach().requires_grad_(True)
+            optimized_heads = predicted_heads.clone().detach().requires_grad_(True)
+
+            self.semantic_parser.train(True)
 
             def projection(ys):
                 batch_size, sequence_length, _ = ys.size()
@@ -159,20 +159,20 @@ class SyntacticThenSemanticParser(Model):
                 self.semantic_parser.zero_grad()
                 semantic_outputs = self.semantic_parser(
                         words=words,
-                        head_indices=predicted_heads,
+                        head_indices=optimized_heads,
                         pos_tags=pos_tags,
                         metadata=metadata,
                         arc_tags=arc_tags)
 
-                predicted_heads = opt.step(
+                optimized_heads = opt.step(
                         loss=semantic_outputs['loss'],
-                        ys=predicted_heads)
+                        ys=optimized_heads)
 
-            predicted_heads = predicted_heads.clone().detach().requires_grad_(False)
+            optimized_heads = optimized_heads.requires_grad_(False)
             self.semantic_parser.zero_grad()
             semantic_outputs = self.semantic_parser(
                     words=words,
-                    head_indices=predicted_heads,
+                    head_indices=predicted_heads.detach().requires_grad_(False),
                     pos_tags=pos_tags,
                     metadata=metadata,
                     arc_tags=arc_tags)
@@ -205,10 +205,10 @@ class SyntacticThenSemanticParser(Model):
 
             loss += semantic_outputs['loss']
 
-            if self.optimizer_config['iterations'] > 1:
+            if self.optimizer_config['iterations'] > 1 and self.training:
                 loss += kl_divergence(
                         attended_arcs[:, 1:],
-                        predicted_heads,
+                        optimized_heads,
                         mask_with_root_token[:, 1])
 
             arc_indices = (arc_tags != -1).float()
