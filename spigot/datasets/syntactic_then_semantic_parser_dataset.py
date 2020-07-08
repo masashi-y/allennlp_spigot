@@ -13,6 +13,8 @@ from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from allennlp.data.tokenizers import Token
 from allennlp.data.instance import Instance
 
+import random
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,11 +59,18 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
     skip_when_no_arcs : `bool`, optional (default=`True`)
         If this is true, skip examples containing no semantic arcs.
     """
-    def __init__(self,
-        skip_when_no_arcs = True,
+    def __init__(
+        self,
+        skip_when_no_arcs: bool = True,
+        drop_random_syntactic_ratio: float = None,
         **kwargs) -> None:
         super().__init__(**kwargs)
         self.skip_when_no_arcs = skip_when_no_arcs
+        assert (
+            drop_random_syntactic_ratio is None
+            or 0. <= drop_random_syntactic_ratio <= 1.
+        ), '`drop_random_syntactic_ratio` must be within 0. and 1.'
+        self.drop_random_syntactic_ratio = drop_random_syntactic_ratio
 
     @overrides
     def _read(self, file_path: str):
@@ -70,6 +79,7 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
 
         logger.info("Reading semantic dependency parsing data from: %s", file_path)
 
+        drop_count, kept_count = 0, 0
         with open(file_path) as sdp_file:
             for annotated_sentence, directed_arc_indices, arc_tags in lazy_parse(sdp_file.read()):
                 # If there are no arc indices, skip this instance.
@@ -77,9 +87,20 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
                     continue
                 tokens = [word["form"] for word in annotated_sentence]
                 pos_tags = [normalize_postag(word["pos"]) for word in annotated_sentence]
-                heads = [int(word["head"]) for word in annotated_sentence]
-                assert is_tree(heads), ', '.join(str(head) for head in heads)
-                head_tags = [normalize_deprel(word["deprel"]) for word in annotated_sentence]
+
+                if (
+                    self.drop_random_syntactic_ratio is not None
+                    and random.random() <= self.drop_random_syntactic_ratio
+                ):
+                    head, head_tags = None, None
+                    drop_count += 1
+                else:
+                    heads = [int(word["head"]) for word in annotated_sentence]
+                    assert is_tree(heads), ', '.join(str(head) for head in heads)
+                    head_tags = [normalize_deprel(word["deprel"])
+                                 for word in annotated_sentence]
+                    kept_count += 1
+
                 yield self.text_to_instance(
                     words=tokens,
                     pos_tags=pos_tags,
@@ -87,6 +108,10 @@ class SyntacticThenSemanticDependenciesdatasetReader(SemanticDependenciesDataset
                     head_tags=head_tags,
                     arc_indices=directed_arc_indices,
                     arc_tags=arc_tags)
+        logger.info(
+            "%d/%d examples are with/without syntactic dependencies.",
+            kept_count,
+            drop_count)
 
     @overrides
     def text_to_instance(
