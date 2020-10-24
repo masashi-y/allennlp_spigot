@@ -1,4 +1,3 @@
-
 import torch
 from allennlp.nn.util import tiny_value_of_dtype
 
@@ -27,16 +26,33 @@ def gather_row(x, indices):
          [5, 6]]
     ])
     """
-    assert len(x.size()) == 3 and len(indices.size()) == 2, \
-            'not supported input tensor shape'
+    assert (
+        len(x.size()) == 3 and len(indices.size()) == 2
+    ), "not supported input tensor shape"
     batch_size, sequence_size, hidden_size = x.size()
-    indices += torch.arange(
-            0, batch_size * sequence_size, sequence_size).to(x.device)[:, None]
+    indices += torch.arange(0, batch_size * sequence_size, sequence_size).to(x.device)[
+        :, None
+    ]
 
     out = x.view((batch_size * sequence_size, hidden_size))
     out = out.index_select(0, indices.flatten())
     out = out.reshape(indices.size() + (hidden_size,))
     return out
+
+
+def gumbel_noise(
+    shape: torch.Size,
+    device: Optional[torch.device] = None,
+    dtype: torch.dtype = torch.float,
+    eps: float = 1e-12,
+) -> torch.FloatTensor:
+    uniform = torch.rand(shape).to(device)
+
+    return -torch.log(-torch.log(uniform + eps) + eps)
+
+
+def gumbel_noise_like(tensor: torch.FloatTensor) -> torch.FloatTensor:
+    return gumbel_noise(shape=tensor.size(), device=tensor.device, dtype=tensor.dtype)
 
 
 def masked_gumbel_softmax(

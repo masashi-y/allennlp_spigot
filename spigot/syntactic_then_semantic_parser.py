@@ -1,24 +1,21 @@
-
-from typing import Dict, Tuple, Any, List
-import logging
 import copy
+import logging
+from typing import Any, Dict, List, Tuple
 
-from overrides import overrides
-import torch
 import numpy
-
+import torch
 from allennlp.data import TextFieldTensors, Vocabulary
 from allennlp.models.model import Model
 from allennlp.nn import InitializerApplicator
-from allennlp.nn.util import get_text_field_mask
-from allennlp.nn.util import get_lengths_from_binary_sequence_mask
-from allennlp.nn.util import masked_softmax
-from spigot.differentiable_eisner import differentiable_eisner
-from spigot.utils import masked_gumbel_softmax, kl_divergence
+from allennlp.nn.util import (get_lengths_from_binary_sequence_mask,
+                              get_text_field_mask, masked_softmax)
 from allennlp.training.metrics import F1Measure
-from spigot.optim import GradientDescentOptimizer
-from spigot.algorithms.krucker import project_onto_knapsack_constraint_batch
+from overrides import overrides
 
+from spigot.algorithms.krucker import project_onto_knapsack_constraint_batch
+from spigot.differentiable_eisner import differentiable_eisner
+from spigot.optim import GradientDescentOptimizer
+from spigot.utils import gumbel_noise_like, kl_divergence
 
 logger = logging.getLogger(__name__)
 
@@ -42,18 +39,22 @@ class SyntacticThenSemanticParser(Model):
         **kwargs
     ) -> None:
         super().__init__(vocab, **kwargs)
-        assert not (freeze_syntactic_parser and (share_pos_tag_embedding or share_text_field_embedder)), \
-            'when setting `freeze_syntactic_parser`, `share_pos_tag_embedding` and `share_text_field_embedder` must be disabled'
+        assert not (
+            freeze_syntactic_parser
+            and (share_pos_tag_embedding or share_text_field_embedder)
+        ), "when setting `freeze_syntactic_parser`, `share_pos_tag_embedding` and `share_text_field_embedder` must be disabled"
         self.syntactic_parser = syntactic_parser
         self.semantic_parser = semantic_parser
         self.syntactic_parser.requires_grad_(not freeze_syntactic_parser)
         if share_text_field_embedder:
-            self.semantic_parser.text_field_embedder = \
-                    self.syntactic_parser.text_field_embedder
+            self.semantic_parser.text_field_embedder = (
+                self.syntactic_parser.text_field_embedder
+            )
             self.semantic_parser.requires_grad_()
         if share_pos_tag_embedding:
-            self.semantic_parser._pos_tag_embedding = \
-                    self.syntactic_parser._pos_tag_embedding
+            self.semantic_parser._pos_tag_embedding = (
+                self.syntactic_parser._pos_tag_embedding
+            )
             self.semantic_parser._pos_tag_embedding.requires_grad_()
         self.decay_syntactic_loss = decay_syntactic_loss
         self.freeze_syntactic_parser = freeze_syntactic_parser
@@ -61,7 +62,7 @@ class SyntacticThenSemanticParser(Model):
         self.gumbel_sampling = gumbel_sampling
         self.stop_syntactic_training_at_epoch = stop_syntactic_training_at_epoch
         self.epoch = 0
-        self.optimizer_config = optimizer_config or {'iterations': 1}
+        self.optimizer_config = optimizer_config or {"iterations": 1}
         # just out of curiosity, this evaluates if syntactic dependencies evolve
         # closer to semantic dependencies, when no syn. supervision signal available?
         self._unlabelled_f1 = F1Measure(positive_label=1)
@@ -106,36 +107,33 @@ class SyntacticThenSemanticParser(Model):
         An output dictionary.
         """
         syntactic_outputs = self.syntactic_parser(
-                words=words,
-                pos_tags=pos_tags,
-                metadata=metadata,
-                head_tags=head_tags,
-                head_indices=head_indices)
+            words=words,
+            pos_tags=pos_tags,
+            metadata=metadata,
+            head_tags=head_tags,
+            head_indices=head_indices,
+        )
 
-        attended_arcs = syntactic_outputs['attended_arcs']
+        attended_arcs = syntactic_outputs["attended_arcs"]
         mask = get_text_field_mask(words)
         batch_size, _ = mask.size()
-        mask_with_root_token = torch.cat(
-                [mask.new_ones((batch_size, 1)), mask], dim=1)
+        mask_with_root_token = torch.cat([mask.new_ones((batch_size, 1)), mask], dim=1)
 
         if self.training and self.gumbel_sampling:
-            attended_arcs = masked_gumbel_softmax(
-                    attended_arcs, mask_with_root_token, dim=2)
-        else:
-            attended_arcs = masked_softmax(
-                    attended_arcs, mask_with_root_token, dim=2)
+            attended_arcs += gumbel_noise_like(attended_arcs)
 
-        predicted_heads = differentiable_eisner(
-                attended_arcs,
-                mask_with_root_token)[:, 1:]
+        predicted_heads = differentiable_eisner(attended_arcs, mask_with_root_token)[
+            :, 1:
+        ]
 
-        if self.optimizer_config['iterations'] <= 1 or not self.training:
+        if self.optimizer_config["iterations"] <= 1 or not self.training:
             semantic_outputs = self.semantic_parser(
-                    words=words,
-                    head_indices=predicted_heads,
-                    pos_tags=pos_tags,
-                    metadata=metadata,
-                    arc_tags=arc_tags)
+                words=words,
+                head_indices=predicted_heads,
+                pos_tags=pos_tags,
+                metadata=metadata,
+                arc_tags=arc_tags,
+            )
         else:
             # disable flow of grads through differentiable_eisner
             optimized_heads = predicted_heads.clone().detach().requires_grad_(True)
@@ -145,71 +143,73 @@ class SyntacticThenSemanticParser(Model):
             def projection(ys):
                 batch_size, sequence_length, _ = ys.size()
                 ys = project_onto_knapsack_constraint_batch(
-                        ys.view(batch_size * sequence_length, -1),
-                        mask.flatten().bool())
+                    ys.view(batch_size * sequence_length, -1), mask.flatten().bool()
+                )
                 return ys.view(batch_size, sequence_length, -1)
 
             opt = GradientDescentOptimizer(
                 projection=projection,
                 track_higher_grads=False,
-                lr=self.optimizer_config.get('lr', 0.1),
-                use_sqrt_decay=self.optimizer_config.get('use_sqrt_decay', False))
+                lr=self.optimizer_config.get("lr", 0.1),
+                use_sqrt_decay=self.optimizer_config.get("use_sqrt_decay", False),
+            )
 
-            for _ in range(self.optimizer_config['iterations']):
+            for _ in range(self.optimizer_config["iterations"]):
                 self.semantic_parser.zero_grad()
                 semantic_outputs = self.semantic_parser(
-                        words=words,
-                        head_indices=optimized_heads,
-                        pos_tags=pos_tags,
-                        metadata=metadata,
-                        arc_tags=arc_tags)
+                    words=words,
+                    head_indices=optimized_heads,
+                    pos_tags=pos_tags,
+                    metadata=metadata,
+                    arc_tags=arc_tags,
+                )
 
                 optimized_heads = opt.step(
-                        loss=semantic_outputs['loss'],
-                        ys=optimized_heads)
+                    loss=semantic_outputs["loss"], ys=optimized_heads
+                )
 
             optimized_heads = optimized_heads.requires_grad_(False)
             self.semantic_parser.zero_grad()
             semantic_outputs = self.semantic_parser(
-                    words=words,
-                    head_indices=predicted_heads.detach().requires_grad_(False),
-                    pos_tags=pos_tags,
-                    metadata=metadata,
-                    arc_tags=arc_tags)
+                words=words,
+                head_indices=predicted_heads.detach().requires_grad_(False),
+                pos_tags=pos_tags,
+                metadata=metadata,
+                arc_tags=arc_tags,
+            )
 
         output_dict = {
-            'heads': syntactic_outputs['heads'],
-            'head_tags': syntactic_outputs['head_tags'],
-            'arc_probs': semantic_outputs['arc_probs'],
-            'arc_tag_probs': semantic_outputs['arc_tag_probs'],
-            'mask': mask,
-            'words': [meta['words'] for meta in metadata],
-            'pos': [meta['pos'] for meta in metadata],
+            "heads": syntactic_outputs["heads"],
+            "head_tags": syntactic_outputs["head_tags"],
+            "arc_probs": semantic_outputs["arc_probs"],
+            "arc_tag_probs": semantic_outputs["arc_tag_probs"],
+            "mask": mask,
+            "words": [meta["words"] for meta in metadata],
+            "pos": [meta["pos"] for meta in metadata],
         }
 
-        loss = 0.
+        loss = 0.0
         if head_indices is not None:
-            output_dict['syntactic_arc_loss'] = syntactic_outputs['arc_loss']
-            output_dict['syntactic_tag_loss'] = syntactic_outputs['tag_loss']
+            output_dict["syntactic_arc_loss"] = syntactic_outputs["arc_loss"]
+            output_dict["syntactic_tag_loss"] = syntactic_outputs["tag_loss"]
 
             if not (
-                self.freeze_syntactic_parser or
-                self.stop_syntactic_training_at_epoch is not None and
-                self.stop_syntactic_training_at_epoch <= self.epoch
+                self.freeze_syntactic_parser
+                or self.stop_syntactic_training_at_epoch is not None
+                and self.stop_syntactic_training_at_epoch <= self.epoch
             ):
-                loss += self.decay_syntactic_loss * syntactic_outputs['loss']
+                loss += self.decay_syntactic_loss * syntactic_outputs["loss"]
 
         if arc_tags is not None:
-            output_dict['semantic_arc_loss'] = semantic_outputs['arc_loss']
-            output_dict['semantic_tag_loss'] = semantic_outputs['tag_loss']
+            output_dict["semantic_arc_loss"] = semantic_outputs["arc_loss"]
+            output_dict["semantic_tag_loss"] = semantic_outputs["tag_loss"]
 
-            loss += semantic_outputs['loss']
+            loss += semantic_outputs["loss"]
 
-            if self.optimizer_config['iterations'] > 1 and self.training:
+            if self.optimizer_config["iterations"] > 1 and self.training:
                 loss += kl_divergence(
-                        attended_arcs[:, 1:],
-                        optimized_heads,
-                        mask_with_root_token[:, 1])
+                    attended_arcs[:, 1:], optimized_heads, mask_with_root_token[:, 1]
+                )
 
             arc_indices = (arc_tags != -1).float()
             tag_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
@@ -217,10 +217,11 @@ class SyntacticThenSemanticParser(Model):
             one_minus_predicted_heads = 1 - predicted_heads
             self._unlabelled_f1(
                 torch.stack([one_minus_predicted_heads, predicted_heads], -1),
-                arc_indices, tag_mask
+                arc_indices,
+                tag_mask,
             )
 
-        output_dict['loss'] = loss
+        output_dict["loss"] = loss
 
         return output_dict
 
@@ -258,9 +259,9 @@ class SyntacticThenSemanticParser(Model):
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metrics = self.semantic_parser._labelled_f1.get_metric(reset)
         unlabeled_f1 = self._unlabelled_f1.get_metric(reset)
-        metrics["dep_precision"] = unlabeled_f1['precision']
-        metrics["dep_recall"] = unlabeled_f1['recall']
-        metrics["dep_f1"] = unlabeled_f1['f1']
+        metrics["dep_precision"] = unlabeled_f1["precision"]
+        metrics["dep_recall"] = unlabeled_f1["recall"]
+        metrics["dep_f1"] = unlabeled_f1["f1"]
         attachment_scores = self.syntactic_parser.get_metrics(reset)
         metrics["UAS"] = attachment_scores["UAS"]
         return metrics
