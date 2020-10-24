@@ -22,8 +22,6 @@ def project_onto_knapsack_constraint(x, weights=None):
     lower_sorted, lower_sorted_indices = torch.sort(lower_bounds)
     upper_sorted, upper_sorted_indices = torch.sort(upper_bounds)
     tight_sum = torch.sum(lower_bounds * weights)
-    lower_sorted = torch.cat([lower_sorted, x.new_tensor([INF])])
-    upper_sorted = torch.cat([upper_sorted, x.new_tensor([INF])])
 
     slack_weight = 0.
     level = k = l = 0
@@ -34,23 +32,33 @@ def project_onto_knapsack_constraint(x, weights=None):
         if level != 0:
             tau = (total_weight - tight_sum) / slack_weight
 
-        left, right = right, min(lower_sorted[k], upper_sorted[l])
+        if k < d:
+            value_lower = lower_sorted[k]
+            index_lower = lower_sorted_indices[k]
+        else:
+            value_lower = INF
 
-        if slack_weight == 0 and total_weight == tight_sum or \
-                slack_weight != 0 and left <= tau <= right:
+        if l < d:
+            value_upper = upper_sorted[l]
+            index_upper = upper_sorted_indices[l]
+        else:
+            value_upper = INF
+
+        left, right = right, min(value_lower, value_upper)
+
+        if level == 0 and total_weight == tight_sum or \
+                level != 0 and left <= tau <= right:
             found = True
             break
 
-        if lower_sorted[k] < upper_sorted[l]:
-            index = lower_sorted_indices[k]
-            tight_sum -= lower_bounds[index] * weights[index]
-            slack_weight += weights[index]
+        if value_lower < value_upper:
+            tight_sum -= lower_bounds[index_lower] * weights[index_lower]
+            slack_weight += weights[index_lower]
             level += 1
             k += 1
         else:
-            index = upper_sorted_indices[l]
-            tight_sum += upper_bounds[index] * weights[index]
-            slack_weight -= weights[index]
+            tight_sum += upper_bounds[index_upper] * weights[index_upper]
+            slack_weight -= weights[index_upper]
             level -= 1
             l += 1
 
@@ -62,70 +70,87 @@ def project_onto_knapsack_constraint(x, weights=None):
     return x + solution
 
 
-def get_item(x, k):
-    return x.gather(1, k).squeeze(1)
+def get_item(x, k, cond=None):
+    if cond is not None:
+        k = k.masked_fill(~cond, 0)
+    result = x.gather(1, k.unsqueeze(dim=-1)).squeeze(1)
+    if cond is not None:
+        return result[cond]
+    return result
 
 
 def _project_onto_knapsack_constraint_batch(xs):
     n, d = xs.size()
-    inf_tensor = xs.new_full((n, 1), INF)
-    lower_bounds = torch.cat([- xs, inf_tensor], axis=1)
-    upper_bounds = torch.cat([1 - xs, inf_tensor], axis=1)
-    weights = xs.new_ones((n, d), dtype=torch.float)
-    # weights[:, -1] = 0.
+
+    lower_bounds = - xs
+    upper_bounds = 1 - xs
+
     total_weight = 1 - xs.sum(dim=1)
     lower_sorted, lower_sorted_indices = torch.sort(lower_bounds, dim=1)
     upper_sorted, upper_sorted_indices = torch.sort(upper_bounds, dim=1)
-    tight_sum = torch.sum(lower_bounds[:, :-1] * weights, dim=1)
+    tight_sum = torch.sum(lower_bounds, dim=1)
 
     slack_weight = xs.new_zeros((n,), dtype=torch.float)
     level = xs.new_zeros((n,), dtype=torch.long)
-    k = xs.new_zeros((n, 1), dtype=torch.long)
-    l = xs.new_zeros((n, 1), dtype=torch.long)
-    left = xs.new_full((n,), INF, dtype=torch.float)
-    right = xs.new_full((n,), INF, dtype=torch.float)
+    k = xs.new_zeros((n,), dtype=torch.long)
+    l = xs.new_zeros((n,), dtype=torch.long)
+    left = xs.new_full((n,), -INF, dtype=torch.float)
+    right = xs.new_full((n,), -INF, dtype=torch.float)
     not_found = xs.new_ones((n,), dtype=torch.bool)
     tau = xs.new_zeros((n,), dtype=torch.float)
+    value_lower = xs.new_zeros((n,), dtype=torch.float)
+    value_upper = xs.new_zeros((n,), dtype=torch.float)
+    index_lower = xs.new_zeros((n,), dtype=torch.long)
+    index_upper = xs.new_zeros((n,), dtype=torch.long)
+    to_search = xs.new_ones((n,), dtype=torch.bool)
 
-    for _ in range(2 * d):
-        cond = not_found.logical_and(level != 0)
+    # for _ in range(2 * d):
+    while to_search.any():
+
+        mask = to_search & not_found
+
+        cond = mask & (level != 0)
         tau[cond] = (total_weight[cond] - tight_sum[cond]) / slack_weight[cond]
 
-        a = get_item(lower_sorted, k)
-        b = get_item(upper_sorted, l)
-        left[not_found] = right[not_found]
-        right[not_found] = torch.min(a, b)[not_found]
+        cond = mask & (k < d)
+        value_lower[cond] = get_item(lower_sorted, k, cond)
+        value_lower[mask & (k >= d)] = INF
+        index_lower[cond] = get_item(lower_sorted_indices, k, cond)
 
-        not_found &= (level == 0).logical_and(total_weight == tight_sum).logical_not_()
-        not_found &= (level != 0).logical_and(left <= tau).logical_and(tau <= right).logical_not_()
+        cond = mask & (l < d)
+        value_upper[cond] = get_item(upper_sorted, l, cond)
+        value_upper[mask & (l >= d)] = INF
+        index_upper[cond] = get_item(upper_sorted_indices, l, cond)
+
+        left[mask] = right[mask]
+        right[mask] = torch.min(value_lower, value_upper)[mask]
+
+        not_found &= torch.where(
+                level == 0, (left > tau) | (tau > right), total_weight != tight_sum)
         if not not_found.any(): break
 
-        index_a = lower_sorted_indices.gather(1, k)
-        index_b = upper_sorted_indices.gather(1, l)
-        weights_a = get_item(weights, index_a)
-        weights_b = get_item(weights, index_b)
-
-        cond = not_found.logical_and(a < b)
-        tight_sum[cond] -= get_item(lower_bounds, index_a)[cond] * weights_a[cond]
-        slack_weight[cond] += weights_a[cond]
+        cond = mask & (value_lower < value_upper)
+        tight_sum[cond] -= get_item(lower_bounds, index_lower)[cond]
+        slack_weight[cond] += 1.0
         level[cond] += 1
         k[cond] += 1
 
-        cond = not_found.logical_and(a >= b)
-        tight_sum[cond] += get_item(upper_bounds, index_b)[cond] * weights_b[cond]
-        slack_weight[cond] -= weights_b[cond]
+        cond = mask & (value_lower >= value_upper)
+        tight_sum[cond] += get_item(upper_bounds, index_upper)[cond]
+        slack_weight[cond] -= 1.0
         level[cond] -= 1
         l[cond] += 1
+
+        to_search &= (k < d) | (l < d)
 
     solution = tau[:, None].repeat(1, d)
     left[not_found] = right[not_found]
     right[not_found] = INF
-    lower_bounds = lower_bounds[:, :-1]
-    upper_bounds = upper_bounds[:, :-1]
     left, right = left[:, None], right[:, None]
 
     solution[lower_bounds >= right] = lower_bounds[lower_bounds >= right]
     solution[upper_bounds <= left] = upper_bounds[upper_bounds <= left]
+
     return xs + solution
 
 

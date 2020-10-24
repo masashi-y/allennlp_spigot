@@ -1,7 +1,8 @@
 {
   vocabulary: {
-    type: 'from_files',
-    directory: '/home/masashi-y/my_spigot/vocabulary',
+    type: 'extend',
+    directory: std.extVar("vocab"),
+    only_include_pretrained_words: true
   },
   dataset_reader: {
     type: 'syntactic_then_semantic',
@@ -10,15 +11,15 @@
     type: 'syntactic_then_semantic',
     "skip_when_no_arcs": false 
   },
-  train_data_path: '/home/masashi-y/english/english_dm_augmented_train.sdp',
-  validation_data_path: '/home/masashi-y/english/english_dm_augmented_dev.sdp',
-  test_data_path: '/home/masashi-y/english/english_id_dm_augmented_test.sdp',
+  train_data_path: std.extVar("train"),
+  validation_data_path: std.extVar("dev"),
+  test_data_path: std.extVar("test"),
   model: {
     type: 'syntactic_then_semantic',
     share_text_field_embedder: false,
     share_pos_tag_embedding: false,
-    gumbel_sampling: true,
-    stop_syntactic_training_at_epoch: 40,
+    // gumbel_sampling: false,
+    // stop_syntactic_training_at_epoch: 40,
     decay_syntactic_loss: 1.0,
     freeze_syntactic_parser: false,
     edge_prediction_threshold: 0.5,
@@ -116,7 +117,7 @@
     num_epochs: 80,
     grad_clipping: 1.0,
     patience: 50,
-    cuda_device: 0,
+    cuda_device: std.parseInt(std.extVar("device")),
     validation_metric: '+f1',
     optimizer: {
       type: 'adam',
