@@ -257,10 +257,10 @@ class SyntacticThenSemanticParser(Model):
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metrics = self.semantic_parser._labelled_f1.get_metric(reset)
-        precision, recall, f1_measure = self._unlabelled_f1.get_metric(reset)
-        metrics["dep_precision"] = precision
-        metrics["dep_recall"] = recall
-        metrics["dep_f1"] = f1_measure
+        unlabeled_f1 = self._unlabelled_f1.get_metric(reset)
+        metrics["dep_precision"] = unlabeled_f1['precision']
+        metrics["dep_recall"] = unlabeled_f1['recall']
+        metrics["dep_f1"] = unlabeled_f1['f1']
         attachment_scores = self.syntactic_parser.get_metrics(reset)
         metrics["UAS"] = attachment_scores["UAS"]
         return metrics

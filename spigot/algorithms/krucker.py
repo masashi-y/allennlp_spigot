@@ -128,9 +128,9 @@ def _project_onto_knapsack_constraint_batch(xs):
         left[mask] = right[mask]
         right[mask] = torch.min(value_lower, value_upper)[mask]
 
-        not_found &= torch.where(
-            level == 0, (left > tau) | (tau > right), total_weight != tight_sum
-        )
+        not_found &= (level == 0) & (left > tau) | (tau > right)
+        not_found &= (level != 0) & (total_weight != tight_sum)
+
         if not not_found.any():
             break
 

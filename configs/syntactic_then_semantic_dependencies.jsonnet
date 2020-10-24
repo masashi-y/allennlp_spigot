@@ -66,7 +66,7 @@ local syntactic_parser = if pretrained_syntactic_parser != '' then {
     type: 'syntactic_then_semantic',
     share_text_field_embedder: false,
     share_pos_tag_embedding: false,
-    // gumbel_sampling: false,
+    gumbel_sampling: true,
     // stop_syntactic_training_at_epoch: 40,
     decay_syntactic_loss: 1.0,
     freeze_syntactic_parser: false,
@@ -80,6 +80,7 @@ local syntactic_parser = if pretrained_syntactic_parser != '' then {
             type: 'embedding',
             embedding_dim: 100,
             pretrained_file: 'https://allennlp.s3.amazonaws.com/datasets/glove/glove.6B.100d.txt.gz',
+            sparse: false,
             trainable: true,
           },
         },
@@ -87,6 +88,7 @@ local syntactic_parser = if pretrained_syntactic_parser != '' then {
       pos_tag_embedding: {
         embedding_dim: 100,
         vocab_namespace: 'pos',
+        sparse: false,
       },
       encoder: {
         type: 'stacked_bidirectional_lstm',
