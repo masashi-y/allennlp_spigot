@@ -1,28 +1,117 @@
+local pretrained_syntactic_parser = std.extVar('pretrained');
+
+local syntactic_parser = if pretrained_syntactic_parser != '' then {
+  type: 'from_archive',
+  archive_file: '/home/masashi-y/my_spigot/biaffine-dependency-parser-ptb-2020.02.10.fixed.tar.gz',
+} else {
+  type: 'my_biaffine_parser',
+  text_field_embedder: {
+    token_embedders: {
+      tokens: {
+        type: 'embedding',
+        embedding_dim: 100,
+        pretrained_file: 'https://allennlp.s3.amazonaws.com/datasets/glove/glove.6B.100d.txt.gz',
+        trainable: true,
+      },
+    },
+  },
+  pos_tag_embedding: {
+    embedding_dim: 100,
+    vocab_namespace: 'pos',
+  },
+  encoder: {
+    type: 'stacked_bidirectional_lstm',
+    input_size: 200,
+    hidden_size: 400,
+    num_layers: 3,
+    recurrent_dropout_probability: 0.3,
+    use_highway: true,
+  },
+  use_mst_decoding_for_validation: true,
+  arc_representation_dim: 500,
+  tag_representation_dim: 100,
+  dropout: 0.3,
+  input_dropout: 0.3,
+  initializer: {
+    regexes: [
+      ['.*projection.*weight', { type: 'xavier_uniform' }],
+      ['.*projection.*bias', { type: 'zero' }],
+      ['.*tag_bilinear.*weight', { type: 'xavier_uniform' }],
+      ['.*tag_bilinear.*bias', { type: 'zero' }],
+      ['.*weight_ih.*', { type: 'xavier_uniform' }],
+      ['.*weight_hh.*', { type: 'orthogonal' }],
+      ['.*bias_ih.*', { type: 'zero' }],
+      ['.*bias_hh.*', { type: 'lstm_hidden_bias' }],
+    ],
+  },
+};
+
 {
   vocabulary: {
-    type: 'from_files',
-    directory: '/home/masashi-y/my_spigot/vocabulary',
+    type: 'extend',
+    directory: std.extVar('vocab'),
+    only_include_pretrained_words: true,
   },
   dataset_reader: {
     type: 'syntactic_then_semantic',
   },
   validation_dataset_reader: {
     type: 'syntactic_then_semantic',
-    skip_when_no_arcs: false
+    skip_when_no_arcs: false,
   },
-  train_data_path: '/home/masashi-y/english/english_dm_augmented_train.sdp',
-  validation_data_path: '/home/masashi-y/english/english_dm_augmented_dev.sdp',
-  test_data_path: '/home/masashi-y/english/english_id_dm_augmented_test.sdp',
+  train_data_path: std.extVar('train'),
+  validation_data_path: std.extVar('dev'),
+  test_data_path: std.extVar('test'),
   model: {
     type: 'syntactic_then_semantic',
-    share_text_field_embedder: true,
-    share_pos_tag_embedding: true,
-    decay_syntactic_loss: 0.9,
+    share_text_field_embedder: false,
+    share_pos_tag_embedding: false,
+    // gumbel_sampling: false,
+    // stop_syntactic_training_at_epoch: 40,
+    decay_syntactic_loss: 1.0,
     freeze_syntactic_parser: false,
     edge_prediction_threshold: 0.5,
     syntactic_parser: {
-      type: 'from_archive',
-      archive_file: '/home/masashi-y/my_spigot/biaffine-dependency-parser-ptb-2020.02.10.fixed.tar.gz',
+      type: 'my_biaffine_parser',
+      text_field_embedder: {
+        token_embedders: {
+          tokens: {
+            type: 'embedding',
+            embedding_dim: 100,
+            pretrained_file: 'https://allennlp.s3.amazonaws.com/datasets/glove/glove.6B.100d.txt.gz',
+            trainable: true,
+          },
+        },
+      },
+      pos_tag_embedding: {
+        embedding_dim: 100,
+        vocab_namespace: 'pos',
+      },
+      encoder: {
+        type: 'stacked_bidirectional_lstm',
+        input_size: 200,
+        hidden_size: 400,
+        num_layers: 3,
+        recurrent_dropout_probability: 0.3,
+        use_highway: true,
+      },
+      use_mst_decoding_for_validation: true,
+      arc_representation_dim: 500,
+      tag_representation_dim: 100,
+      dropout: 0.3,
+      input_dropout: 0.3,
+      initializer: {
+        regexes: [
+          ['.*projection.*weight', { type: 'xavier_uniform' }],
+          ['.*projection.*bias', { type: 'zero' }],
+          ['.*tag_bilinear.*weight', { type: 'xavier_uniform' }],
+          ['.*tag_bilinear.*bias', { type: 'zero' }],
+          ['.*weight_ih.*', { type: 'xavier_uniform' }],
+          ['.*weight_hh.*', { type: 'orthogonal' }],
+          ['.*bias_ih.*', { type: 'zero' }],
+          ['.*bias_hh.*', { type: 'lstm_hidden_bias' }],
+        ],
+      },
     },
     semantic_parser: {
       type: 'syntactically_informed_graph_parser',
@@ -31,13 +120,14 @@
           tokens: {
             type: 'embedding',
             embedding_dim: 100,
+            pretrained_file: 'https://allennlp.s3.amazonaws.com/datasets/glove/glove.6B.100d.txt.gz',
+            trainable: true,
           },
         },
       },
       pos_tag_embedding: {
         embedding_dim: 100,
         vocab_namespace: 'pos',
-        sparse: true,
       },
       encoder: {
         type: 'stacked_bidirectional_lstm',
@@ -75,10 +165,10 @@
     num_epochs: 80,
     grad_clipping: 1.0,
     patience: 50,
-    cuda_device: 1,
+    cuda_device: std.parseInt(std.extVar('device')),
     validation_metric: '+f1',
     optimizer: {
-      type: 'dense_sparse_adam',
+      type: 'adam',
       betas: [0.9, 0.9],
     },
   },

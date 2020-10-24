@@ -1,9 +1,9 @@
 import torch
-from spigot import differentiable_eisner
+from spigot.differentiable_eisner import differentiable_eisner
 
 def test():
     # ROOT this is a pen
-    device = torch.device(0)
+    device = torch.device('cpu')
     scores = torch.tensor([
         [
             [0., 0., 0., 0., 0., 0.],  # ROOT

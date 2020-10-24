@@ -1,7 +1,6 @@
-
 import torch
 
-INF = float('inf')
+INF = float("inf")
 
 
 def project_onto_knapsack_constraint(x, weights=None):
@@ -13,8 +12,8 @@ def project_onto_knapsack_constraint(x, weights=None):
     and returns x + v, which is projection of x onto simplex,
     satisfying sum_i x_i + v_i = 1 and 0 <= x_i + v_i <= 1 (i = 1, ..., n).
     """
-    d, = x.size()
-    lower_bounds = - x
+    (d,) = x.size()
+    lower_bounds = -x
     upper_bounds = 1 - x
     if weights is None:
         weights = x.new_ones((d,), dtype=torch.float)
@@ -23,9 +22,9 @@ def project_onto_knapsack_constraint(x, weights=None):
     upper_sorted, upper_sorted_indices = torch.sort(upper_bounds)
     tight_sum = torch.sum(lower_bounds * weights)
 
-    slack_weight = 0.
+    slack_weight = 0.0
     level = k = l = 0
-    left = right = - INF
+    left = right = -INF
     found = False
 
     while k < d or l < d:
@@ -46,8 +45,12 @@ def project_onto_knapsack_constraint(x, weights=None):
 
         left, right = right, min(value_lower, value_upper)
 
-        if level == 0 and total_weight == tight_sum or \
-                level != 0 and left <= tau <= right:
+        if (
+            level == 0
+            and total_weight == tight_sum
+            or level != 0
+            and left <= tau <= right
+        ):
             found = True
             break
 
@@ -82,7 +85,7 @@ def get_item(x, k, cond=None):
 def _project_onto_knapsack_constraint_batch(xs):
     n, d = xs.size()
 
-    lower_bounds = - xs
+    lower_bounds = -xs
     upper_bounds = 1 - xs
 
     total_weight = 1 - xs.sum(dim=1)
@@ -126,8 +129,10 @@ def _project_onto_knapsack_constraint_batch(xs):
         right[mask] = torch.min(value_lower, value_upper)[mask]
 
         not_found &= torch.where(
-                level == 0, (left > tau) | (tau > right), total_weight != tight_sum)
-        if not not_found.any(): break
+            level == 0, (left > tau) | (tau > right), total_weight != tight_sum
+        )
+        if not not_found.any():
+            break
 
         cond = mask & (value_lower < value_upper)
         tight_sum[cond] -= get_item(lower_bounds, index_lower)[cond]
@@ -154,7 +159,7 @@ def _project_onto_knapsack_constraint_batch(xs):
     return xs + solution
 
 
-def project_onto_knapsack_constraint_batch(xs, mask=None, padding=0.):
+def project_onto_knapsack_constraint_batch(xs, mask=None, padding=0.0):
     if mask is None:
         return _project_onto_knapsack_constraint_batch(xs)
     assert len(mask.size()) == 1
